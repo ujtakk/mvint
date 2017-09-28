@@ -45,7 +45,7 @@ def parseopt():
                         help="source movie dir to extract motion vectors")
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd300")
-    parser.add_argument("--gpu", type=int, default=-1)
+    parser.add_argument("--gpu", "-g", type=int, default=-1)
     parser.add_argument("--pretrained_model", default="voc0712")
     return parser.parse_args()
 
@@ -53,7 +53,7 @@ def main():
     args = parseopt()
     dump_flow(args.movie)
     flow = pick_flow(args.movie)
-    detector = Detector()
+    detector = Detector(gpu=args.gpu)
     draw_box_flow_func = \
         lambda movie, flow: draw_box_flow(movie, flow, detector)
     vis_flow(args.movie, flow, draw=draw_box_flow_func)
