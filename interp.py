@@ -7,7 +7,7 @@ from multiprocessing import Pool
 import numpy as np
 import pandas as pd
 import cv2
-import tqdm
+from tqdm import trange
 
 from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
@@ -32,41 +32,37 @@ def map_flow(flow, frame):
         flow_map[flow_index[i][0], flow_index[i][1], :] = \
             flow[base_index[i][0], base_index[i][1], :]
 
-    return flow_map
+    return flow_map, index_rate
+
+def interp_bbox(bbox, flow_map, index_rate):
+    height = flow_map.shape[0]
+    width = flow_map.shape[1]
+
+    flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
+                                 :], axis=(0, 1))
+    flow_mean = np.nan_to_num(flow_mean)
+    frame_mean = index_rate * flow_mean
+    frame_mean *= index_rate
+
+    left  = bbox.left + frame_mean[1]
+    top   = bbox.top + frame_mean[0]
+    right = bbox.right + frame_mean[1]
+    bot   = bbox.bot + frame_mean[0]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
 
 def interp_linear(bboxes, flow, frame):
-    flow_map = map_flow(flow, frame)
-    height = frame.shape[0]
-    width = frame.shape[1]
-    index_rate = np.asarray(frame.shape[0:2]) // np.asarray(flow.shape[0:2])
-    def interp_bbox(bbox):
-        flow_mean = np.mean(flow_map[bbox.top:bbox.bot,
-                                     bbox.left:bbox.right,
-                                     :], axis=(0, 1))
-        flow_mean = 4 * index_rate * flow_mean
-
-        left  = int(bbox.left + flow_mean[1])
-        if left < 0:
-            left = 0
-
-        top   = int(bbox.top + flow_mean[0])
-        if top < 0:
-            top = 0
-
-        right = int(bbox.right + flow_mean[1])
-        if right > width-1:
-            right = width-1
-
-        bot   = int(bbox.bot + flow_mean[0])
-        if bot > height-1:
-            bot = height-1
-
-        return pd.Series({"name": bbox.name, "prob": bbox.prob,
-            "left": left, "top": top, "right": right, "bot": bot})
+    flow_map, index_rate = map_flow(flow, frame)
 
     for bbox in bboxes.itertuples():
         idx = bbox.Index
-        bboxes.loc[idx] = interp_bbox(bbox)
+        bboxes.loc[idx] = interp_bbox(bbox, flow_map, index_rate)
 
     return bboxes
 
@@ -87,23 +83,24 @@ def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear):
 def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
     cap, out = open_video(movie)
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     pos = 0
-    for i in tqdm.trange(count):
+    for i in trange(count):
         ret, frame = cap.read()
         if ret is False or i > bboxes.size:
             break
 
-        cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (10, height-10),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
         if header["pict_type"][i] == "I":
             frame_drawed = draw_main(frame, flow[i], bboxes[i])
             pos = i
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_sub(frame, flow[i], bboxes[pos])
+        cv2.putText(frame,
+                    f"pict_type: {header['pict_type'][i]}", (10, height-10),
+                    cv2.FONT_HERSHEY_DUPLEX, 1, (200, 200, 200), 2)
         out.write(frame_drawed)
 
     cap.release()
