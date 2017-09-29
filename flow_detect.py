@@ -43,6 +43,9 @@ def parseopt():
     parser.add_argument("movie",
                         default="mpi_sinel_final_alley_1",
                         help="source movie dir to extract motion vectors")
+    parser.add_argument("--nobbox", "-n",
+                        action="store_true", default=False,
+                        help="dump occupancy enabled version")
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd300")
     parser.add_argument("--gpu", "-g", type=int, default=-1)
@@ -56,7 +59,10 @@ def main():
     detector = Detector(gpu=args.gpu)
     draw_box_flow_func = \
         lambda movie, flow: draw_box_flow(movie, flow, detector)
-    vis_flow(args.movie, flow, draw=draw_box_flow_func)
+    if args.nobbox:
+        vis_flow(args.movie, flow)
+    else:
+        vis_flow(args.movie, flow, draw=draw_box_flow_func)
 
 if __name__ == "__main__":
     main()

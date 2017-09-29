@@ -10,8 +10,10 @@ import subprocess
 
 import cv2
 import numpy as np
+import pandas as pd
 import tqdm
 
+GREP_CMD = "/usr/bin/grep"
 FLOW_CMD = join("mpegflow", "mpegflow")
 VIS_CMD = join("mpegflow", "vis")
 
@@ -36,6 +38,8 @@ def dump_flow(movie, occupancy=False):
     flow_base = join(flow_dir, basename(movie))
     subprocess.run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}",
                     shell=True)
+    subprocess.run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
+                    shell=True)
 
     # visualize motion vectors
     subprocess.run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
@@ -53,36 +57,50 @@ def pick_flow(movie):
     flow_dir = join(movie, "mpegflow_dump")
     flow_base = join(flow_dir, basename(movie))
 
-    header = r"# pts=(\d+) frame_index=(\d+) pict_type=([IPB]) " \
-           + r"output_type=(\w+) shape=(\w+) origin=(\w+)"
-    string = open(flow_base+".txt").readline().strip()
-    H = re.match(header, string)
+    def convert(header_line):
+        header_re = r"# pts=(\d+) frame_index=(-?\d+) pict_type=([IPB?]) " \
+                  + r"output_type=(\w+) shape=(\w+) origin=(\w+)"
 
-    pts = int(H.group(1))
-    frame_index = int(H.group(2))
-    pict_type = H.group(3)
-    output_type = H.group(4)
-    shape = tuple(map(int, H.group(5).split('x')))
-    origin = H.group(6)
+        string = header_line.strip()
+        H = re.match(header_re, string)
 
-    data = np.loadtxt(flow_base+".txt") \
-             .reshape((-1, 2, shape[0]//2, shape[1]))
+        pts = int(H.group(1))
+        frame_index = int(H.group(2))
+        pict_type = H.group(3)
+        output_type = H.group(4)
+        shape = tuple(map(int, H.group(5).split('x')))
+        origin = H.group(6)
+
+        return pd.DataFrame({"pts": [pts],
+                             "frame_index": [frame_index],
+                             "pict_type": [pict_type],
+                             "output_type": [output_type],
+                             "shape_first": [shape[0]],
+                             "shape_second": [shape[1]],
+                             "origin": [origin]})
+
+    headers = list(map(convert, open(flow_base+"_header.txt").readlines()))
+    header = pd.concat(headers, ignore_index=True)
+
+    data = np.loadtxt(flow_base+".txt").reshape(
+            (-1, 2, header["shape_first"][0]//2, header["shape_second"][1]))
     data = np.moveaxis(data, 1, 3)
 
-    return data
+    return data, header
 
-def flow(movie, occupancy=False):
+def get_flow(movie, occupancy=False):
     dump_flow(movie, occupancy)
     flow = pick_flow(movie)
 
     return flow
 
-def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
-               line_color=(0, 0, 255), start_color=(0, 255, 0)):
-    cv2.line(frame, start, end, line_color, 2)
-    return frame
-
 def draw_flow(frame, flow):
+    def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
+                   line_color=(0, 0, 255), start_color=(0, 255, 0)):
+        cv2.line(frame, start, end, line_color, 2)
+        # cv2.circle(frame, start, 1, (255, 255, 0), -1)
+        return frame
+
     frame_rows = frame.shape[0]
     frame_cols = frame.shape[1]
     assert(frame.shape[2] == 3)
@@ -93,8 +111,8 @@ def draw_flow(frame, flow):
 
     for i in range(rows):
         for j in range(cols):
-            dx = flow[i, j, 0]
-            dy = flow[i, j, 1]
+            dy = flow[i, j, 0]
+            dx = flow[i, j, 1]
 
             start = (j * frame_cols / cols + frame_cols / cols / 2,
                      i * frame_rows / rows + frame_rows / rows / 2)
@@ -106,38 +124,6 @@ def draw_flow(frame, flow):
             frame = draw_arrow(frame, start, end)
 
     return frame
-
-def vis_flow(movie, flow, draw=draw_flow):
-    movie_name = join(movie, basename(movie))
-    if not exists(movie_name+".mp4"):
-        if exists(movie_name+".avi"):
-            subprocess.run(
-                f"ffmpeg -y -i {movie_name+'.avi'} {movie_name+'.mp4'}",
-                shell=True)
-        else:
-            raise Exception("source movie doesn't exist.")
-    movie_file = join(movie, basename(movie)) + ".mp4"
-
-    cap = cv2.VideoCapture(movie_file)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
-    if exists("out.mp4"):
-        os.remove("out.mp4")
-    fourcc = cv2.VideoWriter_fourcc(*"avc1")
-    out = cv2.VideoWriter("out.mp4", fourcc, fps, (width, height))
-
-    for i in tqdm.tqdm(range(flow.shape[0])):
-        ret, frame = cap.read()
-        if ret is True:
-            frame_drawed = draw(frame, flow[i])
-            out.write(frame_drawed)
-        else:
-            break
-
-    cap.release()
-    out.release()
 
 def parseopt():
     parser = argparse.ArgumentParser(
@@ -151,6 +137,8 @@ def parseopt():
     return parser.parse_args()
 
 def main():
+    from vis import vis_flow
+
     args = parseopt()
     dump_flow(args.movie, args.occupancy)
     flow = pick_flow(args.movie)
