@@ -1,4 +1,5 @@
 #!/bin/bash
+# wget http://pjreddie.com/media/files/yolo9000.weights
 
 MOVIE=$1
 if [[ $MOVIE = "" ]]; then
