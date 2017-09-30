@@ -42,12 +42,15 @@ def interp_bbox(bbox, flow_map, index_rate):
                                  :], axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
     frame_mean = index_rate * flow_mean
+
+    # TODO: divide each corner
+    # frame_mean = -np.sign(frame_mean) * (frame_mean ** 2)
     frame_mean *= index_rate
 
-    left  = bbox.left + frame_mean[1]
-    top   = bbox.top + frame_mean[0]
-    right = bbox.right + frame_mean[1]
-    bot   = bbox.bot + frame_mean[0]
+    left  = bbox.left + frame_mean[0]
+    top   = bbox.top + frame_mean[1]
+    right = bbox.right + frame_mean[0]
+    bot   = bbox.bot + frame_mean[1]
 
     left  = np.clip(left, 0, width-1).astype(np.int)
     top   = np.clip(top, 0, height-1).astype(np.int)
@@ -55,16 +58,18 @@ def interp_bbox(bbox, flow_map, index_rate):
     bot   = np.clip(bot, 0, height-1).astype(np.int)
 
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot})
+        "left": left, "top": top, "right": right, "bot": bot}), frame_mean
 
 def interp_linear(bboxes, flow, frame):
     flow_map, index_rate = map_flow(flow, frame)
 
+    frame_means = []
     for bbox in bboxes.itertuples():
         idx = bbox.Index
-        bboxes.loc[idx] = interp_bbox(bbox, flow_map, index_rate)
+        bboxes.loc[idx], frame_mean = interp_bbox(bbox, flow_map, index_rate)
+        frame_means.append(frame_mean)
 
-    return bboxes
+    return bboxes, frame_means
 
 def interp_none(bboxes, flow, frame):
     return bboxes
@@ -76,8 +81,8 @@ def draw_i_frame(frame, flow, bboxes):
 
 def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear):
     frame = draw_flow(frame, flow)
-    interp_bboxes = interp(base_bboxes, flow, frame)
-    frame = draw_bboxes(frame, interp_bboxes)
+    interp_bboxes, frame_means = interp(base_bboxes, flow, frame)
+    frame = draw_bboxes(frame, interp_bboxes, frame_means)
     return frame
 
 def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
@@ -99,8 +104,8 @@ def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
             # bboxes[pos] is updated by reference
             frame_drawed = draw_sub(frame, flow[i], bboxes[pos])
         cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (10, height-10),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (200, 200, 200), 2)
+                    f"pict_type: {header['pict_type'][i]}", (width-200, 50),
+                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
         out.write(frame_drawed)
 
     cap.release()

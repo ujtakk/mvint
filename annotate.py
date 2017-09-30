@@ -28,21 +28,28 @@ def pick_bbox(dir_path):
 
     return pd.Series(A)
 
-def draw_bbox(frame, bbox):
+def draw_bbox(frame, bbox, frame_mean=None):
     cv2.rectangle(frame, (bbox.left, bbox.top), (bbox.right, bbox.bot),
                   (0, 255, 0), 2)
     cv2.putText(frame, f"{bbox.name}: {bbox.prob}",
                 (bbox.left, bbox.top-10),
                 cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
+    if frame_mean is not None:
+        cv2.putText(frame, f"{frame_mean}",
+                    (bbox.left, bbox.bot+20),
+                    cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
 
     return frame
 
-def draw_bboxes(frame, bboxes):
+def draw_bboxes(frame, bboxes, frame_means=None):
     if bboxes.size == 0:
         return frame
 
     for bbox in bboxes.itertuples():
-        frame = draw_bbox(frame, bbox)
+        if frame_means is None:
+            frame = draw_bbox(frame, bbox)
+        else:
+            frame = draw_bbox(frame, bbox, frame_means[bbox.Index])
 
     return frame
 
