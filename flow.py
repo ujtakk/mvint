@@ -98,8 +98,8 @@ def draw_flow(frame, flow):
     def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
                    line_color=(0, 0, 255), start_color=(0, 255, 0)):
         cv2.line(frame, start, end, line_color, 2)
-        cv2.circle(frame, start, 1, (0, 255, 255), -1)
-        cv2.circle(frame, end, 1, (255, 255, 0), -1)
+        cv2.circle(frame, end, 1, (0, 255, 255), -1)
+        cv2.circle(frame, start, 1, (255, 255, 0), -1)
         return frame
 
     frame_rows = frame.shape[0]

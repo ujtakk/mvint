@@ -45,7 +45,7 @@ def interp_bbox(bbox, flow_map, index_rate):
 
     # TODO: divide each corner
     # frame_mean = -np.sign(frame_mean) * (frame_mean ** 2)
-    frame_mean *= index_rate
+    frame_mean *= 2.0 * index_rate
 
     left  = bbox.left + frame_mean[0]
     top   = bbox.top + frame_mean[1]
@@ -85,8 +85,17 @@ def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear):
     frame = draw_bboxes(frame, interp_bboxes, frame_means)
     return frame
 
-def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
-    cap, out = open_video(movie)
+def vis_interp(movie, header, flow, bboxes, full=False, base=False):
+    if full and base:
+        raise "rendering mode could not be duplicated"
+
+    if full:
+        cap, out = open_video(movie, postfix="full")
+    elif base:
+        cap, out = open_video(movie, postfix="base")
+    else:
+        cap, out = open_video(movie)
+
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -98,14 +107,21 @@ def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
             break
 
         if header["pict_type"][i] == "I":
-            frame_drawed = draw_main(frame, flow[i], bboxes[i])
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
             pos = i
+        elif full:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+        elif base:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
         else:
             # bboxes[pos] is updated by reference
-            frame_drawed = draw_sub(frame, flow[i], bboxes[pos])
+            frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
+
+        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (width-200, 50),
+                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+
         out.write(frame_drawed)
 
     cap.release()
@@ -114,13 +130,21 @@ def vis_interp(movie, header, flow, bboxes, draw_main, draw_sub):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
+    parser.add_argument("--full", "-f",
+                        action="store_true", default=False,
+                        help="render P-frame by true bbox")
+    parser.add_argument("--base", "-b",
+                        action="store_true", default=False,
+                        help="render P-frame by base I-frame's bbox")
     return parser.parse_args()
 
 def main():
     args = parse_opt()
+
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    vis_interp(args.movie, header, flow, bboxes, draw_i_frame, draw_p_frame)
+    vis_interp(args.movie, header, flow, bboxes,
+               full=args.full, base=args.base)
 
 if __name__ == "__main__":
     main()
