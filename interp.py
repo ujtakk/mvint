@@ -13,7 +13,6 @@ from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
-from kalman import interp_kalman
 
 def map_flow(flow, frame):
     frame_rows = frame.shape[0]
@@ -35,7 +34,7 @@ def map_flow(flow, frame):
 
     return flow_map, index_rate
 
-def interp_linear(bbox, flow_map, index_rate):
+def interp_linear_unit(bbox, flow_map, index_rate):
     flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
                                  :], axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
@@ -62,13 +61,14 @@ def interp_linear(bbox, flow_map, index_rate):
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
         "left": left, "top": top, "right": right, "bot": bot}), frame_mean
 
-def interp_bboxes(bboxes, flow, frame, interp_bbox=interp_kalman):
+def interp_linear(bboxes, flow, frame):
     flow_map, index_rate = map_flow(flow, frame)
 
     frame_means = []
     for bbox in bboxes.itertuples():
         idx = bbox.Index
-        bboxes.loc[idx], frame_mean = interp_bbox(bbox, flow_map, index_rate)
+        bboxes.loc[idx], frame_mean = \
+            interp_linear_unit(bbox, flow_map, index_rate)
         frame_means.append(frame_mean)
 
     return bboxes, frame_means
@@ -81,7 +81,7 @@ def draw_i_frame(frame, flow, bboxes):
     frame = draw_bboxes(frame, bboxes)
     return frame
 
-def draw_p_frame(frame, flow, base_bboxes, interp=interp_bboxes):
+def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear):
     frame = draw_flow(frame, flow)
     interp_bboxes, frame_means = interp(base_bboxes, flow, frame)
     frame = draw_bboxes(frame, interp_bboxes, frame_means)
