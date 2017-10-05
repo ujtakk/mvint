@@ -4,6 +4,7 @@ import os
 from os.path import join, exists, basename
 import re
 import sys
+import glob
 
 import argparse
 import subprocess
@@ -36,14 +37,17 @@ def dump_flow(movie, occupancy=False):
 
     # extract motion vectors
     flow_base = join(flow_dir, basename(movie))
-    subprocess.run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}",
-                    shell=True)
-    subprocess.run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
-                    shell=True)
+    if not exists(flow_base+".txt"):
+        subprocess.run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}",
+                        shell=True)
+    if not exists(flow_base+"_header.txt"):
+        subprocess.run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
+                        shell=True)
 
     # visualize motion vectors
-    subprocess.run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
-                    shell=True)
+    if not glob.glob(join(vis_dir, "*.png")):
+        subprocess.run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
+                        shell=True)
 
     # visualize motion vectors and occupancy info
     if occupancy:

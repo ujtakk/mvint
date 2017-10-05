@@ -13,6 +13,7 @@ from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
+from kalman import interp_kalman
 
 def map_flow(flow, frame):
     frame_rows = frame.shape[0]
@@ -23,7 +24,7 @@ def map_flow(flow, frame):
     cols = flow.shape[1]
     assert(flow.shape[2] == 2)
 
-    flow_map = np.zeros((frame_rows, frame_cols,  2))
+    flow_map = np.zeros((frame_rows, frame_cols,  2), dtype=np.float32)
 
     base_index = np.asarray(tuple(np.ndindex((rows, cols))))
     index_rate = np.asarray((frame_rows // rows, frame_cols // cols))
@@ -34,10 +35,7 @@ def map_flow(flow, frame):
 
     return flow_map, index_rate
 
-def interp_bbox(bbox, flow_map, index_rate):
-    height = flow_map.shape[0]
-    width = flow_map.shape[1]
-
+def interp_linear(bbox, flow_map, index_rate):
     flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
                                  :], axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
@@ -47,10 +45,14 @@ def interp_bbox(bbox, flow_map, index_rate):
     # frame_mean = -np.sign(frame_mean) * (frame_mean ** 2)
     frame_mean *= 2.0 * index_rate
 
+
     left  = bbox.left + frame_mean[0]
     top   = bbox.top + frame_mean[1]
     right = bbox.right + frame_mean[0]
     bot   = bbox.bot + frame_mean[1]
+
+    height = flow_map.shape[0]
+    width = flow_map.shape[1]
 
     left  = np.clip(left, 0, width-1).astype(np.int)
     top   = np.clip(top, 0, height-1).astype(np.int)
@@ -60,7 +62,7 @@ def interp_bbox(bbox, flow_map, index_rate):
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
         "left": left, "top": top, "right": right, "bot": bot}), frame_mean
 
-def interp_linear(bboxes, flow, frame):
+def interp_bboxes(bboxes, flow, frame, interp_bbox=interp_kalman):
     flow_map, index_rate = map_flow(flow, frame)
 
     frame_means = []
@@ -79,7 +81,7 @@ def draw_i_frame(frame, flow, bboxes):
     frame = draw_bboxes(frame, bboxes)
     return frame
 
-def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear):
+def draw_p_frame(frame, flow, base_bboxes, interp=interp_bboxes):
     frame = draw_flow(frame, flow)
     interp_bboxes, frame_means = interp(base_bboxes, flow, frame)
     frame = draw_bboxes(frame, interp_bboxes, frame_means)
