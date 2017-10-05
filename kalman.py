@@ -17,7 +17,7 @@ from interp import draw_i_frame, draw_p_frame, map_flow
 def calc_center(bbox):
     center_y = np.mean((bbox.bot, bbox.top))
     center_x = np.mean((bbox.right, bbox.left))
-    center = np.asarray((center_y, center_x))
+    center = np.asarray((center_x, center_y))
 
     return center
 
@@ -28,10 +28,10 @@ class KalmanInterpolator:
         self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
         self.kalman.controlMatrix = np.float32(alpha * np.eye(2))
         self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
-        # self.kalman.processNoiseCov = np.float32(1e-5 * np.eye(2))
-        # self.kalman.measurementNoiseCov = np.float32(1e-1 * np.ones((2, 2)))
-        self.kalman.processNoiseCov = np.float32(0.0 * np.eye(2))
-        self.kalman.measurementNoiseCov = np.float32(0.0 * np.ones((2, 2)))
+        self.kalman.processNoiseCov = np.float32(1e-5 * np.eye(2))
+        self.kalman.measurementNoiseCov = np.float32(1e-1 * np.ones((2, 2)))
+        # self.kalman.processNoiseCov = np.float32(0.0 * np.eye(2))
+        # self.kalman.measurementNoiseCov = np.float32(0.0 * np.ones((2, 2)))
 
         self.total = 0
         self.count = 0
@@ -54,8 +54,8 @@ class KalmanInterpolator:
 
         for i in range(self.total):
             self.errorCovList.append(
-                    # (1.0 * np.eye(2)).astype(np.float32))
-                    (0.0 * np.eye(2)).astype(np.float32))
+                    (1.0 * np.eye(2)).astype(np.float32))
+                    # (0.0 * np.eye(2)).astype(np.float32))
 
     def predict(self, control):
         self.kalman.statePost = self.stateList[self.count]
@@ -85,7 +85,7 @@ class KalmanInterpolator:
         else:
             self.count += 1
 
-        return new_center.flatten()
+        return state.flatten()
 
 def interp_kalman_unit(bbox, flow_map, index_rate, kalman):
     flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
