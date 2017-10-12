@@ -23,15 +23,13 @@ def calc_center(bbox):
 
 # delegated class
 class KalmanInterpolator:
-    def __init__(self, alpha=512):
+    def __init__(self, alpha=512, processNoise=1e-3, measurementNoise=1e-3):
         self.kalman = cv2.KalmanFilter(2, 2, 2)
         self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
         self.kalman.controlMatrix = np.float32(alpha * np.eye(2))
         self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
-        self.kalman.processNoiseCov = np.float32(1e-5 * np.eye(2))
-        self.kalman.measurementNoiseCov = np.float32(1e-1 * np.ones((2, 2)))
-        # self.kalman.processNoiseCov = np.float32(0.0 * np.eye(2))
-        # self.kalman.measurementNoiseCov = np.float32(0.0 * np.ones((2, 2)))
+        self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
+        self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
 
         self.total = 0
         self.count = 0
@@ -175,6 +173,91 @@ def vis_kalman(movie, header, flow, bboxes, full=False, base=False):
     cap.release()
     out.release()
 
+def vis_composed(movie, header, flow, bboxes, full=False, base=False):
+    if full and base:
+        raise "rendering mode could not be duplicated"
+
+    if full:
+        cap, out = open_video(movie, postfix="full")
+    elif base:
+        cap, out = open_video(movie, postfix="base")
+    else:
+        cap, out = open_video(movie)
+
+    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    kalman_0 = KalmanInterpolator(processNoise=1e0, measurementNoise=1e0)
+    interp_kalman_clos_0 = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman_0)
+
+    kalman_1 = KalmanInterpolator(processNoise=1e1, measurementNoise=1e1)
+    interp_kalman_clos_1 = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman_1)
+
+    pos = 0
+    pos_0 = 0
+    pos_1 = 0
+    bboxes_0 = bboxes.copy()
+    bboxes_1 = bboxes.copy()
+    color_0 = (0, 255, 255)
+    color_1 = (255, 255, 0)
+    for i in trange(count):
+        ret, frame = cap.read()
+        if ret is False or i > bboxes.size:
+            break
+
+        # linear
+        if header["pict_type"][i] == "I":
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+            pos = i
+        elif full:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+        elif base:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        else:
+            # bboxes[pos] is updated by reference
+            frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
+
+        # kalman_0
+        if header["pict_type"][i] == "I":
+            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[i], color=color_0)
+            pos_0 = i
+            kalman_0.reset(bboxes[pos_0])
+        elif full:
+            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[i], color=color_0)
+        elif base:
+            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[pos_0], color=color_0)
+        else:
+            # bboxes[pos_0] is updated by reference
+            frame_drawed_0 = draw_p_frame(frame_drawed, flow[i], bboxes_0[pos_0],
+                                        interp=interp_kalman_clos_0, color=color_0)
+
+        # kalman_1
+        if header["pict_type"][i] == "I":
+            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[i], color=color_1)
+            pos_1 = i
+            kalman_1.reset(bboxes[pos_1])
+        elif full:
+            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[i], color=color_1)
+        elif base:
+            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[pos_1], color=color_1)
+        else:
+            # bboxes[pos_1] is updated by reference
+            frame_drawed_1 = draw_p_frame(frame_drawed_0, flow[i], bboxes_1[pos_1],
+                                        interp=interp_kalman_clos_1, color=color_1)
+
+        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+        cv2.putText(frame,
+                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+
+        out.write(frame_drawed_1)
+
+    cap.release()
+    out.release()
+
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
@@ -191,7 +274,9 @@ def main():
 
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    vis_kalman(args.movie, header, flow, bboxes,
+    # vis_kalman(args.movie, header, flow, bboxes,
+    #            full=args.full, base=args.base)
+    vis_composed(args.movie, header, flow, bboxes,
                full=args.full, base=args.base)
 
 if __name__ == "__main__":

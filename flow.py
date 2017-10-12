@@ -7,58 +7,69 @@ import sys
 import glob
 
 import argparse
-import subprocess
+from subprocess import run
 
 import cv2
 import numpy as np
 import pandas as pd
 import tqdm
 
-GREP_CMD = "/usr/bin/grep"
+GREP_CMD = "/bin/grep"
 FLOW_CMD = join("mpegflow", "mpegflow")
 VIS_CMD = join("mpegflow", "vis")
 
-def dump_flow(movie, occupancy=False):
-    flow_dir = join(movie, "mpegflow_dump")
+# refer to gpac/src/media_tools/av_parsers.c for profile and level
+# TODO: profile and level option for mpeg4 in ffmpeg won't be active.
+def dump_flow(movie, occupancy=False, profile="0", level="8", prefix=None):
+    if prefix is None:
+        prefix = movie
+
+    flow_dir = join(prefix, "mpegflow_dump")
     if not exists(flow_dir):
         os.makedirs(flow_dir)
 
-    vis_dir = join(movie, "vis_dump")
+    vis_dir = join(prefix, "vis_dump")
     if not exists(vis_dir):
         os.makedirs(vis_dir)
 
     movie_name = join(movie, basename(movie))
     if not exists(movie_name+".avi"):
         if exists(movie_name+".mp4"):
-            subprocess.run(f"ffmpeg -y -i {movie_name+'.mp4'} {movie_name+'.avi'}", shell=True)
+            run(f"ffmpeg -y -i {movie_name+'.mp4'} \
+                  -codec:v mpeg4 -profile:v {profile} -level {level} \
+                  {movie_name+'.avi'}",
+                shell=True)
         else:
+            print(movie_name)
             raise Exception("source movie doesn't exist.")
     movie_file = movie_name + ".avi"
 
     # extract motion vectors
     flow_base = join(flow_dir, basename(movie))
     if not exists(flow_base+".txt"):
-        subprocess.run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}",
-                        shell=True)
+        run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}", shell=True)
     if not exists(flow_base+"_header.txt"):
-        subprocess.run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
-                        shell=True)
+        run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
+            shell=True)
 
     # visualize motion vectors
     if not glob.glob(join(vis_dir, "*.png")):
-        subprocess.run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
-                        shell=True)
+        run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
+            shell=True)
 
     # visualize motion vectors and occupancy info
     if occupancy:
         occu_dir = join(movie, "vis_dump_occupancy")
         os.makedirs(occu_dir)
 
-        subprocess.run(f"{FLOW_CMD} --occupancy {movie_file} | {VIS_CMD} --occupancy {movie_file} {occu_dir}",
-                        shell=True)
+        run(f"{FLOW_CMD} --occupancy {movie_file} | {VIS_CMD} --occupancy {movie_file} {occu_dir}",
+             shell=True)
 
-def pick_flow(movie):
-    flow_dir = join(movie, "mpegflow_dump")
+def pick_flow(movie, prefix=None):
+    if prefix is None:
+        prefix = movie
+
+    flow_dir = join(prefix, "mpegflow_dump")
     flow_base = join(flow_dir, basename(movie))
 
     def convert(header_line):
@@ -92,9 +103,9 @@ def pick_flow(movie):
 
     return data, header
 
-def get_flow(movie, occupancy=False):
-    dump_flow(movie, occupancy)
-    flow = pick_flow(movie)
+def get_flow(movie, occupancy=False, prefix=None):
+    dump_flow(movie, occupancy, prefix=prefix)
+    flow = pick_flow(movie, prefix=prefix)
 
     return flow
 

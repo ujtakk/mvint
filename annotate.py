@@ -28,28 +28,29 @@ def pick_bbox(dir_path):
 
     return pd.Series(A)
 
-def draw_bbox(frame, bbox, frame_mean=None):
+def draw_bbox(frame, bbox, frame_mean=None, color=(0, 255, 0), caption=True):
     cv2.rectangle(frame, (bbox.left, bbox.top), (bbox.right, bbox.bot),
-                  (0, 255, 0), 2)
-    cv2.putText(frame, f"{bbox.name}: {bbox.prob}",
-                (bbox.left, bbox.top-10),
-                cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
-    if frame_mean is not None:
-        cv2.putText(frame, f"{frame_mean}",
-                    (bbox.left, bbox.bot+20),
+                  color, 2)
+    if caption:
+        cv2.putText(frame, f"{bbox.name}: {bbox.prob}",
+                    (bbox.left, bbox.top-10),
                     cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
+        if frame_mean is not None:
+            cv2.putText(frame, f"{frame_mean}",
+                        (bbox.left, bbox.bot+20),
+                        cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
 
     return frame
 
-def draw_bboxes(frame, bboxes, frame_means=None):
+def draw_bboxes(frame, bboxes, frame_means=None, color=(0, 255, 0)):
     if bboxes.size == 0:
         return frame
 
     for bbox in bboxes.itertuples():
         if frame_means is None:
-            frame = draw_bbox(frame, bbox)
+            frame = draw_bbox(frame, bbox, color=color)
         else:
-            frame = draw_bbox(frame, bbox, frame_means[bbox.Index])
+            frame = draw_bbox(frame, bbox, frame_mean=frame_means[bbox.Index], color=color)
 
     return frame
 
