@@ -35,8 +35,8 @@ def map_flow(flow, frame):
     return flow_map, index_rate
 
 def interp_linear_unit(bbox, flow_map, index_rate):
-    flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
-                                 :], axis=(0, 1))
+    flow_mean = np.nanmean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
+                                    :], axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
     frame_mean = index_rate * flow_mean
 

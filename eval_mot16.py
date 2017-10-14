@@ -48,8 +48,8 @@ class MOT16:
         return self.ids[f"{bbox.name}{bbox.prob:>1.6f}"]
 
     def eval_frame(self, fnum, bboxes, do_mapping=False):
-        # if do_mapping:
-        self.ids = mapping(bboxes, self.prev_bboxes)
+        if do_mapping:
+            self.ids = mapping(bboxes, self.prev_bboxes)
 
         for bbox in bboxes.itertuples():
             obj_id = self.bbox_id(bbox)

@@ -1,12 +1,13 @@
 import os
 import copy
+import uuid
+import argparse
+import configparser
 
 from glob import glob
 from os.path import join, basename, splitext
 from subprocess import run
 from multiprocessing import Pool
-import argparse
-import configparser
 
 import pandas as pd
 import numpy as np
@@ -92,7 +93,8 @@ def pick_mot16_bboxes(path):
         right = (det_entry["left"] + det_entry["width"]).astype(np.int)
         bot = (det_entry["top"] + det_entry["height"]).astype(np.int)
         bboxes[frame-1] = pd.DataFrame({
-            "name": "", "prob": det_entry["score"],
+            "name": [str(uuid.uuid4()) for _ in range(len(det_entry.index))],
+            "prob": det_entry["score"],
             "left": left, "top": top, "right": right, "bot": bot
         })
 

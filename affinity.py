@@ -81,11 +81,17 @@ def exp_cost(det_bbox, pred_bbox):
 
     return position_cost * shape_cost
 
+mapping_id = 1
 def mapping(det_bboxes, pred_bboxes, affinity=lin_cost):
+    global mapping_id
     id_map = dict()
     for bbox in det_bboxes.itertuples():
+        name = bbox.name
+        prob = bbox.prob
         # TODO: fix
-        id_map[f"{bbox.name}{bbox.prob:>1.6f}"] = np.random.randint(1, 100)
+        # id_map[f"{name}{prob:>1.6f}"] = np.random.randint(1, 100)
+        id_map[f"{name}{prob:>1.6f}"] = mapping_id
+        mapping_id += 1
 
     return id_map
 
