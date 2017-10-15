@@ -1,6 +1,5 @@
 import os
 import copy
-import uuid
 import argparse
 import configparser
 
@@ -93,7 +92,7 @@ def pick_mot16_bboxes(path):
         right = (det_entry["left"] + det_entry["width"]).astype(np.int)
         bot = (det_entry["top"] + det_entry["height"]).astype(np.int)
         bboxes[frame-1] = pd.DataFrame({
-            "name": [str(uuid.uuid4()) for _ in range(len(det_entry.index))],
+            "name": "",
             "prob": det_entry["score"],
             "left": left, "top": top, "right": right, "bot": bot
         })
@@ -134,13 +133,45 @@ class MOT16Dataset(chainer.dataset.DatasetMixin):
         (  0, 192, 192),
     )
 
+    data_split = {
+        "train": ("train", (
+            "MOT16-02", "MOT16-04", "MOT16-05", "MOT16-11", "MOT16-13",
+        )),
+        "val": ("train", (
+            "MOT16-09", "MOT16-10",
+        )),
+        "trainval": ("train", (
+            "MOT16-02", "MOT16-04", "MOT16-05", "MOT16-09", "MOT16-10",
+            "MOT16-11", "MOT16-13",
+        )),
+        "test": ("test", (
+            "MOT16-01", "MOT16-03", "MOT16-06", "MOT16-07", "MOT16-08",
+            "MOT16-12", "MOT16-14",
+        )),
+    }
+
     def __init__(self, data_dir, split='train'):
+        if not split in ("train", "val", "trainval", "test"):
+            KeyError("Specified MOT16Dataset split is not available.")
+
+        split_prefix, split_id = self.data_split[split]
+        join_func = lambda id_: join(data_dir, split_prefix, id_)
+        split_paths = tuple(map(join_func, split_id))
+
         self.seqinfo = pd.concat([seqinfo(path)
-                                  for path in glob(join(data_dir, split, "*"))])
+                                  for path in split_paths])
         self.gtinfo = {basename(path): gtinfo(path)
-                       for path in glob(join(data_dir, split, "*"))}
+                       for path in split_paths}
         self.imgs = [name
-                     for name in glob(join(data_dir, split, "*", "img1", "*"))]
+                     for path in split_paths
+                     for name in glob(join(path, "img1", "*"))]
+
+        # self.seqinfo = pd.concat([seqinfo(path)
+        #                           for path in glob(join(data_dir, split, "*"))])
+        # self.gtinfo = {basename(path): gtinfo(path)
+        #                for path in glob(join(data_dir, split, "*"))}
+        # self.imgs = [name
+        #              for name in glob(join(data_dir, split, "*", "img1", "*"))]
 
     def __len__(self):
         return len(self.imgs)
@@ -163,7 +194,13 @@ class MOT16Dataset(chainer.dataset.DatasetMixin):
         width[width < 0] = 0
         height[height < 0] = 0
 
-        bbox = np.stack((left, top, width, height), axis=-1).astype(np.float32)
+        xmin = left
+        ymin = top
+        xmax = xmin + width
+        ymax = ymin + height
+        bbox = np.stack((ymin, xmin, ymax, xmax), axis=-1).astype(np.float32)
+
+        # bbox = np.stack((left, top, width, height), axis=-1).astype(np.float32)
 
         img = read_image(img_file, color=True)
 

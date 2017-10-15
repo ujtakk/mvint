@@ -21,38 +21,39 @@ import argparse
 from collections import defaultdict
 
 import cv2
+import numpy as np
 import pandas as pd
 from tqdm import trange
 
-import mot16
+from mot16 import pick_mot16_bboxes
 from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
 from interp import draw_i_frame, draw_p_frame, map_flow
 from vis import open_video
-from affinity import mapping
+from mapping import Mapper
 
 class MOT16:
-    def __init__(self, src_id, dst_dir="result"):
+    def __init__(self, src_id, dst_dir="result", cost_thresh=40000):
         if not exists(dst_dir):
             os.makedirs(dst_dir)
 
         self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
-        self.ids = dict()
+
         self.prev_bboxes = pd.DataFrame()
+        self.mapper = Mapper(cost_thresh=cost_thresh)
 
     # def __del__(self):
     #     self.dst_fd.close()
 
-    def bbox_id(self, bbox):
-        return self.ids[f"{bbox.name}{bbox.prob:>1.6f}"]
-
     def eval_frame(self, fnum, bboxes, do_mapping=False):
         if do_mapping:
-            self.ids = mapping(bboxes, self.prev_bboxes)
+            self.mapper.set(bboxes, self.prev_bboxes)
 
+        names = []
         for bbox in bboxes.itertuples():
-            obj_id = self.bbox_id(bbox)
+            obj_id = self.mapper.get(bbox)
+            names.append(str(obj_id))
 
             left = bbox.left
             top = bbox.top
@@ -61,14 +62,16 @@ class MOT16:
 
             print(f"{fnum},{obj_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
+        bboxes["name"] = names
 
-        prev_bboxes = bboxes
+        self.prev_bboxes = bboxes
 
-def eval_mot16(src_id, prefix="MOT16/train"):
-    mot = MOT16(src_id)
+def eval_mot16(src_id, prefix="MOT16/train",
+               thresh=0.0, baseline=False, cost_thresh=40000):
+    mot = MOT16(src_id, cost_thresh=cost_thresh)
 
     movie = join(prefix, src_id)
-    bboxes = mot16.pick_mot16_bboxes(movie)
+    bboxes = pick_mot16_bboxes(movie)
     flow, header = get_flow(movie, prefix=".")
 
     cap, out = open_video(movie)
@@ -77,13 +80,21 @@ def eval_mot16(src_id, prefix="MOT16/train"):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+    for index, bbox in enumerate(bboxes):
+        if not bbox.empty:
+            bboxes[index] = bbox.query(f"prob > {thresh}")
+
     pos = 0
     for i in trange(count):
         ret, frame = cap.read()
         if ret is False or i > bboxes.size:
             break
 
-        if header["pict_type"][i] == "I":
+        if baseline:
+            pos = i
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            mot.eval_frame(i, bboxes[pos], do_mapping=True)
+        elif header["pict_type"][i] == "I":
             pos = i
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i, bboxes[pos], do_mapping=True)
@@ -105,11 +116,19 @@ def eval_mot16(src_id, prefix="MOT16/train"):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("src_id")
+    parser.add_argument("--baseline",
+                        action="store_true", default=False)
+    parser.add_argument("--thresh", type=float, default=0.0)
+    parser.add_argument("--cost", type=float, default=40000)
     return parser.parse_args()
 
 def main():
     args = parse_opt()
-    eval_mot16(args.src_id)
+    eval_mot16(args.src_id,
+               thresh=args.thresh,
+               baseline=args.baseline,
+               # cost_thresh=np.inf)
+               cost_thresh=args.cost)
 
 if __name__ == "__main__":
     main()

@@ -35,14 +35,18 @@ def map_flow(flow, frame):
     return flow_map, index_rate
 
 def interp_linear_unit(bbox, flow_map, index_rate):
-    flow_mean = np.nanmean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
-                                    :], axis=(0, 1))
+    inner_flow = flow_map[bbox.top:bbox.bot, bbox.left:bbox.right, :]
+    if inner_flow.size == 0:
+        flow_mean = np.nan
+    else:
+        flow_mean = np.nanmean(inner_flow, axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
     frame_mean = index_rate * flow_mean
 
     # TODO: divide each corner
     # frame_mean = -np.sign(frame_mean) * (frame_mean ** 2)
-    frame_mean *= 2.0 * index_rate
+    # frame_mean *= 2.0 * index_rate
+    frame_mean *= index_rate
 
 
     left  = bbox.left + frame_mean[0]
