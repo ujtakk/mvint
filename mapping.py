@@ -23,10 +23,12 @@ def lin_cost(next_bbox, prev_bbox):
     b = _convert_bbox(prev_bbox)
 
     position_diff = np.asarray(((a.left - b.left), (a.top - b.top)))
-    position_cost = np.sqrt(np.sum(position_diff**2));
+    position_cost = np.sqrt(np.sum(position_diff**2))
+    position_cost += 1
 
     shape_diff = np.asarray(((a.width - b.width), (a.height - b.height)))
-    shape_cost = np.sqrt(np.sum(shape_diff**2));
+    shape_cost = np.sqrt(np.sum(shape_diff**2))
+    shape_cost += 1
 
     return position_cost * shape_cost
 
@@ -47,6 +49,28 @@ def exp_cost(next_bbox, prev_bbox):
 
     return position_cost * shape_cost
 
+def iou_cost(next_bbox, prev_bbox):
+    cap_left = max(next_bbox.left, prev_bbox.left)
+    cap_top = max(next_bbox.top, prev_bbox.top)
+    cap_right = min(next_bbox.right, prev_bbox.right)
+    cap_bot = min(next_bbox.bot, prev_bbox.bot)
+
+    if cap_left <= cap_right and cap_top <= cap_bot:
+        area_cap = (cap_right - cap_left + 1) * (cap_bot - cap_top + 1)
+    else:
+        area_cap = 0
+
+    area_next = (next_bbox.right - next_bbox.left + 1) \
+              * (next_bbox.bot - next_bbox.top + 1)
+    area_prev = (prev_bbox.right - prev_bbox.left + 1) \
+              * (prev_bbox.bot - prev_bbox.top + 1)
+
+    area_cup = (area_next + area_prev - area_cap)
+
+    iou = area_cap / area_cup
+
+    return 1.0 - iou
+
 def calc_cost(src_bboxes, dst_bboxes, affinity=lin_cost):
     cost_matrix = np.zeros((src_bboxes.shape[0], dst_bboxes.shape[0]))
 
@@ -58,12 +82,12 @@ def calc_cost(src_bboxes, dst_bboxes, affinity=lin_cost):
     return cost_matrix
 
 class Mapper:
-    def __init__(self, affinity=lin_cost, cost_thresh=40000):
+    def __init__(self, affinity=iou_cost, cost_thresh=1.0, log_id=""):
         self.affinity = affinity
         self.cost_thresh = cost_thresh
         self.id_count = 1
         self.ids = dict()
-        self.log = open("cost_matrix.log", "w")
+        self.log = open(f"{log_id}.log", "w")
         np.set_printoptions(linewidth=200)
 
     def _assign_id(self):
@@ -71,15 +95,57 @@ class Mapper:
         self.id_count += 1
         return new_id
 
-    def set(self, next_bboxes, prev_bboxes):
+    def set_min(self, next_bboxes, prev_bboxes):
+        cost = calc_cost(next_bboxes, prev_bboxes, self.affinity)
+        row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
+        idx_range = np.arange(cost.shape[1], dtype=np.float)
+
         id_map = dict()
-        cost_matrix = calc_cost(prev_bboxes, next_bboxes, self.affinity)
-        row_idx, col_idx = sp.optimize.linear_sum_assignment(cost_matrix)
+        for bbox in next_bboxes.itertuples():
+            if prev_bboxes.size != 0:
+                min_idx = np.argmin(cost[bbox.Index])
+                min_cost = cost[bbox.Index, min_idx]
+                if min_idx in idx_range and min_cost < 100:
+                    id_map[bbox.Index] = self.ids[min_idx]
+                    idx_range[min_idx] = np.inf
+                elif bbox.Index in row_idx:
+                    opt_idx = col_idx[row_idx == bbox.Index][0]
+                    opt_cost = cost[bbox.Index, opt_idx]
+
+                    if opt_idx in idx_range and opt_cost < self.cost_thresh:
+                        id_map[bbox.Index] = self.ids[opt_idx]
+                        idx_range[opt_idx] = np.inf
+                    else:
+                        id_map[bbox.Index] = self._assign_id()
+                else:
+                    id_map[bbox.Index] = self._assign_id()
+            else:
+                id_map[bbox.Index] = self._assign_id()
+
+        # self.ids = id_map
+        self.ids.update(id_map)
+        print(self.id_count, file=self.log)
+        print(self.ids, file=self.log)
+        print(file=self.log)
+        print(cost, file=self.log)
+        print(file=self.log)
+        print(row_idx, file=self.log)
+        print(col_idx, file=self.log)
+        print(cost[row_idx, col_idx], file=self.log)
+        print(file=self.log)
+        print(file=self.log)
+        print(file=self.log)
+
+    def set(self, next_bboxes, prev_bboxes):
+        cost = calc_cost(prev_bboxes, next_bboxes, self.affinity)
+        row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
+
+        id_map = dict()
         for bbox in next_bboxes.itertuples():
             # id_map[bbox.Index] = self._assign_id()
             if bbox.Index in col_idx:
                 arg_idx = np.where(col_idx == bbox.Index)[0][0]
-                trans_cost = cost_matrix[row_idx, col_idx][arg_idx]
+                trans_cost = cost[row_idx, col_idx][arg_idx]
                 if trans_cost < self.cost_thresh:
                     id_map[bbox.Index] = self.ids[row_idx[arg_idx]]
                 else:
@@ -90,8 +156,13 @@ class Mapper:
         # self.ids = id_map
         self.ids.update(id_map)
         print(self.id_count, file=self.log)
-        print(cost_matrix.astype(np.int), file=self.log)
-        print(cost_matrix.astype(np.int)[row_idx, col_idx], file=self.log)
+        print(self.ids, file=self.log)
+        print(file=self.log)
+        print(cost, file=self.log)
+        print(file=self.log)
+        print(cost[row_idx, col_idx], file=self.log)
+        print(file=self.log)
+        print(file=self.log)
         print(file=self.log)
 
     def get(self, bbox):
@@ -118,14 +189,14 @@ def main():
     print(lin_cost(det_bbox.loc[0], pred_bbox.loc[0]))
     print(exp_cost(det_bbox.loc[0], pred_bbox.loc[0]))
     calc_cost(det_bbox, pred_bbox)
-    cost_matrix = np.random.randint(1, 100, size=(12, 6))
-    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost_matrix)
+    cost = np.random.randint(1, 100, size=(12, 6))
+    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
     print(row_idx, col_idx)
-    cost_matrix = np.random.randint(1, 100, size=(6, 6)).astype(np.float32)
-    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost_matrix)
+    cost = np.random.randint(1, 100, size=(6, 6)).astype(np.float32)
+    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
     print(row_idx, col_idx)
-    cost_matrix = np.random.randint(1, 100, size=(6, 12))
-    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost_matrix)
+    cost = np.random.randint(1, 100, size=(6, 12))
+    row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
     print(row_idx, col_idx)
 
 if __name__ == "__main__":

@@ -28,6 +28,8 @@ def setup_model(args):
         chainer.cuda.get_device_from_id(args.gpu).use()
         model.to_gpu()
 
+    serializers.load_hdf5(args.param, model)
+
     return model
 
 def predict(model, img, thresh=0.5):
@@ -39,7 +41,7 @@ def predict(model, img, thresh=0.5):
     bbox, label, score = bboxes[0], labels[0], scores[0]
 
     # bbox is (top, left, bot, right) format
-    bbox = bbox[score > thresh, :]
+    bbox = bbox[score > thresh, :].astype(np.int)
     label = label[score > thresh]
     score = score[score > thresh]
 
@@ -80,7 +82,6 @@ def main():
     args = parse_opt()
 
     model = setup_model(args)
-    serializers.load_hdf5(args.param, model)
 
     img = cv2.imread(args.image, cv2.IMREAD_COLOR)
     bboxes = predict(model, img)

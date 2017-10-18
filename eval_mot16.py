@@ -32,6 +32,7 @@ from interp import interp_linear
 from interp import draw_i_frame, draw_p_frame, map_flow
 from vis import open_video
 from mapping import Mapper
+from bbox_ssd import predict, setup_model
 
 class MOT16:
     def __init__(self, src_id, dst_dir="result", cost_thresh=40000):
@@ -41,7 +42,8 @@ class MOT16:
         self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
 
         self.prev_bboxes = pd.DataFrame()
-        self.mapper = Mapper(cost_thresh=cost_thresh)
+        # self.mapper = Mapper(cost_thresh=cost_thresh, log_id=src_id)
+        self.mapper = Mapper(log_id=src_id)
 
     # def __del__(self):
     #     self.dst_fd.close()
@@ -101,7 +103,52 @@ def eval_mot16(src_id, prefix="MOT16/train",
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
+            # frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i, bboxes[pos], do_mapping=False)
+            # mot.eval_frame(i, bboxes[pos], do_mapping=True)
+
+        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+        cv2.putText(frame,
+                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+
+        out.write(frame_drawed)
+
+    cap.release()
+    out.release()
+
+def eval_mot16_pred(args, prefix="MOT16/train",
+                    thresh=0.0, baseline=False, cost_thresh=40000):
+    mot = MOT16(args.src_id, cost_thresh=cost_thresh)
+
+    movie = join(prefix, args.src_id)
+    model = setup_model(args)
+    flow, header = get_flow(movie, prefix=".")
+
+    cap, out = open_video(movie)
+
+    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    bboxes = pd.DataFrame()
+    for i in trange(count):
+        ret, frame = cap.read()
+        if ret is False:
+            break
+
+        if baseline:
+            bboxes = predict(model, frame, thresh=thresh)
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes)
+            mot.eval_frame(i, bboxes, do_mapping=True)
+        elif header["pict_type"][i] == "I":
+            bboxes = predict(model, frame, thresh=thresh)
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes)
+            mot.eval_frame(i, bboxes, do_mapping=True)
+        else:
+            # bboxes[pos] is updated by reference
+            frame_drawed = draw_p_frame(frame, flow[i], bboxes)
+            mot.eval_frame(i, bboxes, do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -120,6 +167,11 @@ def parse_opt():
                         action="store_true", default=False)
     parser.add_argument("--thresh", type=float, default=0.0)
     parser.add_argument("--cost", type=float, default=40000)
+    parser.add_argument("--model",
+                        choices=("ssd300", "ssd512"), default="ssd512")
+    parser.add_argument("--param",
+                        default="/home/work/takau/6.image/mot/mot16_ssd512.h5")
+    parser.add_argument("--gpu", type=int, default=0)
     return parser.parse_args()
 
 def main():
@@ -129,6 +181,10 @@ def main():
                baseline=args.baseline,
                # cost_thresh=np.inf)
                cost_thresh=args.cost)
+    # eval_mot16_pred(args,
+    #                 thresh=args.thresh,
+    #                 baseline=args.baseline,
+    #                 cost_thresh=args.cost)
 
 if __name__ == "__main__":
     main()
