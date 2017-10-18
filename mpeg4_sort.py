@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
+from os.path import join
 import argparse
 
-from mot16 import pick_mot16_bboxes
+from mot16 import pick_mot16_bboxes, detinfo
 from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
@@ -17,50 +18,73 @@ from deep_sort.application_util import visualization
 from deep_sort.deep_sort import nn_matching
 from deep_sort.deep_sort.detection import Detection
 from deep_sort.deep_sort.tracker import Tracker
+from deep_sort.deep_sort_app import create_detections
 
-class DeepSORT():
-    def __init__(self, src_id, det_prefix=None, thresh=0.3):
-        if det_prefix is None:
-            det_prefix = \
-                "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
-        detection_file = join(det_prefix, src_id+".npy")
-        self.detections = np.load(detection_file)
-        self.thresh = thresh
+# class DeepSORT():
+#     def __init__(self, src_id, det_prefix=None, thresh=0.3):
+#         if det_prefix is None:
+#             det_prefix = \
+#                 "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
+#         detection_file = join(det_prefix, src_id+".npy")
+#         self.detections = np.load(detection_file)
+#         self.thresh = thresh
+#
+#     def frame_callback(self, vis, frame_idx):
+#         print("Processing frame %05d" % frame_idx)
+#
+#         # Load image and generate detections.
+#         detections = create_detections(
+#             self.detections, frame_idx, min_detection_height)
+#         detections = [d for d in detections if d.confidence >= self.thresh]
+#
+#         # Run non-maxima suppression.
+#         boxes = np.asarray([d.tlwh for d in detections])
+#         scores = np.asarray([d.confidence for d in detections])
+#         indices = preprocessing.non_max_suppression(
+#             boxes, nms_max_overlap, scores)
+#         detections = [detections[i] for i in indices]
+#
+#         # Update tracker.
+#         tracker.predict()
+#         tracker.update(detections)
+#
+#         # Update visualization.
+#         if display:
+#             image = cv2.imread(
+#                 seq_info["image_filenames"][frame_idx], cv2.IMREAD_COLOR)
+#             vis.set_image(image.copy())
+#             vis.draw_detections(detections)
+#             vis.draw_trackers(tracker.tracks)
+#
+#         # Store results.
+#         for track in tracker.tracks:
+#             if not track.is_confirmed() or track.time_since_update > 1:
+#                 continue
+#             bbox = track.to_tlwh()
+#             results.append([
+#                 frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
 
-    def frame_callback(self, vis, frame_idx):
-        print("Processing frame %05d" % frame_idx)
+def pick_mot16_poi_bboxes(path, det_prefix=None):
+    det = detinfo(path)
+    det_frames = det["frame"].unique()
+    bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
 
-        # Load image and generate detections.
-        detections = create_detections(
-            self.detections, frame_idx, min_detection_height)
-        detections = [d for d in detections if d.confidence >= self.thresh]
+    if det_prefix is None:
+        det_prefix = \
+            "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
+    detection_file = join(det_prefix, src_id+".npy")
+    poi_det = np.load(detection_file)
+    detections = create_detections(
+        self.detections, frame_idx, min_detection_height)
 
-        # Run non-maxima suppression.
-        boxes = np.asarray([d.tlwh for d in detections])
-        scores = np.asarray([d.confidence for d in detections])
-        indices = preprocessing.non_max_suppression(
-            boxes, nms_max_overlap, scores)
-        detections = [detections[i] for i in indices]
-
-        # Update tracker.
-        tracker.predict()
-        tracker.update(detections)
-
-        # Update visualization.
-        if display:
-            image = cv2.imread(
-                seq_info["image_filenames"][frame_idx], cv2.IMREAD_COLOR)
-            vis.set_image(image.copy())
-            vis.draw_detections(detections)
-            vis.draw_trackers(tracker.tracks)
-
-        # Store results.
-        for track in tracker.tracks:
-            if not track.is_confirmed() or track.time_since_update > 1:
-                continue
-            bbox = track.to_tlwh()
-            results.append([
-                frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
+    # for frame in det_frames:
+    #     bboxes[frame-1] = pd.DataFrame({
+    #         "name": "",
+    #         "prob": det_entry["score"],
+    #         "left": left, "top": top, "right": right, "bot": bot
+    #     })
+    #
+    # return pd.Series(bboxes)
 
 def eval_mot16_sort():
     mot = MOT16(src_id, cost_thresh=cost_thresh)
@@ -112,11 +136,13 @@ def eval_mot16_sort():
 
 def parse_opt():
     parser = argparse.ArgumentParser()
+    parser.add_argument("src")
     return parser.parse_args()
 
 def main():
     args = parse_opt()
-    sort = DeepSORT()
+    path = join("MOT16/train", args.src)
+    pick_mot16_poi_bboxes(path)
 
 if __name__ == "__main__":
     main()

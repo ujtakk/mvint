@@ -97,9 +97,7 @@ def pick_mot16_bboxes(path):
             "left": left, "top": top, "right": right, "bot": bot
         })
 
-    bboxes = pd.Series(bboxes)
-
-    return bboxes
+    return pd.Series(bboxes)
 
 class MOT16Dataset(chainer.dataset.DatasetMixin):
     class_map = (
