@@ -31,19 +31,22 @@ from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
 from interp import draw_i_frame, draw_p_frame, map_flow
 from vis import open_video
-from mapping import Mapper
+from mapping import SimpleMapper
 from bbox_ssd import predict, setup_model
 
 class MOT16:
-    def __init__(self, src_id, dst_dir="result", cost_thresh=40000):
+    def __init__(self, src_id, dst_dir="result", mapper=None):
         if not exists(dst_dir):
             os.makedirs(dst_dir)
 
         self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
 
         self.prev_bboxes = pd.DataFrame()
-        # self.mapper = Mapper(cost_thresh=cost_thresh, log_id=src_id)
-        self.mapper = Mapper(log_id=src_id)
+        if mapper is None:
+            # self.mapper = SimpleMapper(cost_thresh=cost_thresh, log_id=src_id)
+            self.mapper = SimpleMapper(log_id=src_id)
+        else:
+            self.mapper = mapper
 
     # def __del__(self):
     #     self.dst_fd.close()
@@ -69,8 +72,9 @@ class MOT16:
         self.prev_bboxes = bboxes
 
 def eval_mot16(src_id, prefix="MOT16/train",
-               thresh=0.0, baseline=False, cost_thresh=40000):
-    mot = MOT16(src_id, cost_thresh=cost_thresh)
+               thresh=0.0, baseline=False, worst=False, cost_thresh=40000):
+    # mot = MOT16(src_id, mapper=SimpleMapper(cost_thresh=cost_thresh, log_id=src_id))
+    mot = MOT16(src_id, mapper=SimpleMapper(log_id=src_id))
 
     movie = join(prefix, src_id)
     bboxes = pick_mot16_bboxes(movie)
@@ -100,12 +104,14 @@ def eval_mot16(src_id, prefix="MOT16/train",
             pos = i
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i, bboxes[pos], do_mapping=True)
+        elif worst:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            mot.eval_frame(i, bboxes[pos], do_mapping=False)
+            # mot.eval_frame(i, bboxes[pos], do_mapping=True)
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
-            # frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i, bboxes[pos], do_mapping=False)
-            # mot.eval_frame(i, bboxes[pos], do_mapping=True)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -118,7 +124,7 @@ def eval_mot16(src_id, prefix="MOT16/train",
     out.release()
 
 def eval_mot16_pred(args, prefix="MOT16/train",
-                    thresh=0.0, baseline=False, cost_thresh=40000):
+                    thresh=0.0, baseline=False, worst=False, cost_thresh=40000):
     mot = MOT16(args.src_id, cost_thresh=cost_thresh)
 
     movie = join(prefix, args.src_id)
@@ -145,6 +151,10 @@ def eval_mot16_pred(args, prefix="MOT16/train",
             bboxes = predict(model, frame, thresh=thresh)
             frame_drawed = draw_i_frame(frame, flow[i], bboxes)
             mot.eval_frame(i, bboxes, do_mapping=True)
+        elif worst:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            mot.eval_frame(i, bboxes[pos], do_mapping=False)
+            # mot.eval_frame(i, bboxes[pos], do_mapping=True)
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes)
@@ -165,6 +175,8 @@ def parse_opt():
     parser.add_argument("src_id")
     parser.add_argument("--baseline",
                         action="store_true", default=False)
+    parser.add_argument("--worst",
+                        action="store_true", default=False)
     parser.add_argument("--thresh", type=float, default=0.0)
     parser.add_argument("--cost", type=float, default=40000)
     parser.add_argument("--model",
@@ -179,11 +191,13 @@ def main():
     eval_mot16(args.src_id,
                thresh=args.thresh,
                baseline=args.baseline,
+               worst=args.worst,
                # cost_thresh=np.inf)
                cost_thresh=args.cost)
     # eval_mot16_pred(args,
     #                 thresh=args.thresh,
     #                 baseline=args.baseline,
+    #                 worst=args.worst,
     #                 cost_thresh=args.cost)
 
 if __name__ == "__main__":

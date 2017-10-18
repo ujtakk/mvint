@@ -82,6 +82,16 @@ def calc_cost(src_bboxes, dst_bboxes, affinity=lin_cost):
     return cost_matrix
 
 class Mapper:
+    def __init__(self):
+        pass
+
+    def set(self, next_bboxes, prev_bboxes):
+        pass
+
+    def get(self, bbox):
+        pass
+
+class SimpleMapper(Mapper):
     def __init__(self, affinity=iou_cost, cost_thresh=1.0, log_id=""):
         self.affinity = affinity
         self.cost_thresh = cost_thresh
