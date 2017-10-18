@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
-from os.path import join
+from os.path import join, split
 import argparse
+
+import numpy as np
+import pandas as pd
 
 from mot16 import pick_mot16_bboxes, detinfo
 from flow import get_flow, draw_flow
@@ -64,27 +67,29 @@ from deep_sort.deep_sort_app import create_detections
 #             results.append([
 #                 frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]])
 
-def pick_mot16_poi_bboxes(path, det_prefix=None):
-    det = detinfo(path)
-    det_frames = det["frame"].unique()
-    bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
-
+def pick_mot16_poi_bboxes(path, det_prefix=None, min_height=0):
+    src_id = split(path)[-1]
     if det_prefix is None:
         det_prefix = \
             "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
     detection_file = join(det_prefix, src_id+".npy")
     poi_det = np.load(detection_file)
-    detections = create_detections(
-        self.detections, frame_idx, min_detection_height)
+    det_frames = np.unique(poi_det[:, 0].astype(np.int))
 
-    # for frame in det_frames:
-    #     bboxes[frame-1] = pd.DataFrame({
-    #         "name": "",
-    #         "prob": det_entry["score"],
-    #         "left": left, "top": top, "right": right, "bot": bot
-    #     })
-    #
-    # return pd.Series(bboxes)
+    bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
+    for frame in det_frames:
+        detections = create_detections(poi_det, frame, min_height)
+        bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
+        score = np.asarray([d.confidence for d in detections])
+
+        bboxes[frame-1] = pd.DataFrame({
+            "name": "",
+            "prob": score,
+            "left": bbox[:, 1], "top": bbox[:, 0],
+            "right": bbox[:, 3], "bot": bbox[:, 2]
+        })
+
+    return pd.Series(bboxes)
 
 def eval_mot16_sort():
     mot = MOT16(src_id, cost_thresh=cost_thresh)
@@ -142,7 +147,8 @@ def parse_opt():
 def main():
     args = parse_opt()
     path = join("MOT16/train", args.src)
-    pick_mot16_poi_bboxes(path)
+    bboxes = pick_mot16_poi_bboxes(path)
+    print(bboxes[42])
 
 if __name__ == "__main__":
     main()
