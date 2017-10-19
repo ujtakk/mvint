@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from os.path import join, split
+from os.path import join, exists, split
 import argparse
 
 import cv2
@@ -26,54 +26,113 @@ from deep_sort.deep_sort.tracker import Tracker
 from deep_sort.deep_sort_app import create_detections
 
 class DeepSORTMapper(Mapper):
-    def __init__(self, src_id, det_prefix=None, thresh=0.3):
-        if det_prefix is None:
-            det_prefix = \
-                "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
-        detection_file = join(det_prefix, src_id+".npy")
-        self.detections = np.load(detection_file)
+    SORT_PREFIX = \
+        "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
+
+    def __init__(self, thresh=0.3):
+        max_cosine_distance = 0.2
+        nn_budget = 100
+
         self.thresh = thresh
         self.metric = nn_matching.NearestNeighborDistanceMetric(
                         "cosine", max_cosine_distance, nn_budget)
-        self.tracker = Tracker(metric)
+        self.tracker = Tracker(self.metric)
+        self.ids = dict()
 
-    def set(self, next_bboxes, prev_bboxes):
-        self.tracker.update(prev_bboxes)
+    def set(self, next_detections, prev_detections, use_prev=False):
+        # if use_prev:
+        #     self.tracker.predict()
+        #     self.tracker.update(prev_detections)
+        # else:
         self.tracker.predict()
-        pass
+        self.tracker.update(next_detections)
 
     def get(self, bbox):
-        pass
+        return self.tracker.tracks[bbox.Index].track_id
 
-    def frame_callback(self, vis, frame_idx):
-        print("Processing frame %05d" % frame_idx)
-
-        # Load image and generate detections.
-        detections = create_detections(
-            self.detections, frame_idx, min_detection_height
-        )
-        detections = [d for d in detections if d.confidence >= self.thresh]
-
-        # Run non-maxima suppression.
-        boxes = np.asarray([d.tlwh for d in detections])
-        scores = np.asarray([d.confidence for d in detections])
-        indices = preprocessing.non_max_suppression(boxes,
-                                                    nms_max_overlap,
-                                                    scores)
-        detections = [detections[i] for i in indices]
-
-        # Update tracker.
-        self.tracker.predict()
-        self.tracker.update(detections)
-
-        # Store results.
+    def get_iter(self, bboxes):
         for track in self.tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
-            bbox = track.to_tlwh()
-            results.append([
-                frame_idx, track.track_id, bbox[0], bbox[1], bbox[2], bbox[3]
-            ])
+
+            yield track.to_tlwh(), track.track_id
+
+class MOT16_SORT:
+    def eval_frame(self, fnum, bboxes, do_mapping=False):
+        if do_mapping:
+            nms_max_overlap = 1.0
+            min_confidence = 0.3
+            detections = create_detections(self.source, fnum, self.min_height)
+            detections = [d for d in detections
+                          if d.confidence >= min_confidence]
+            boxes = np.array([d.tlwh for d in detections])
+            scores = np.array([d.confidence for d in detections])
+            self.indices = preprocessing.non_max_suppression(
+                boxes, nms_max_overlap, scores)
+            detections = [detections[i] for i in self.indices]
+            assert len(detections) == len(bboxes)
+            self.mapper.set(detections, self.prev_detections)
+
+        for bbox, obj_id in self.mapper.get_iter(bboxes):
+            left = bbox[0]
+            top = bbox[1]
+            width = bbox[2]
+            height = bbox[3]
+
+            print(f"{fnum},{obj_id},{left},{top},{width},{height},-1,-1,-1,-1",
+                  file=self.dst_fd)
+
+    SORT_PREFIX = \
+        "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
+
+    def __init__(self, src_id, src_dir=SORT_PREFIX, dst_dir="result"):
+        if not exists(dst_dir):
+            os.makedirs(dst_dir)
+
+        self.src_path = join(src_dir, src_id)
+        self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
+
+        detection_file = self.src_path + ".npy"
+        self.source = np.load(detection_file)
+
+        self.min_height = 0
+        # self.prev_detections = \
+        #     create_detections(self.source, 1, self.min_height)
+        self.prev_detections = []
+        self.mapper = DeepSORTMapper()
+
+        # TEMP
+        max_cosine_distance = 0.2
+        nn_budget = 100
+        self.metric = nn_matching.NearestNeighborDistanceMetric(
+            "cosine", max_cosine_distance, nn_budget)
+        self.tracker = Tracker(self.metric)
+
+    def pick_bboxes(self):
+        det_frames = np.unique(self.source[:, 0].astype(np.int))
+
+        bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
+        for frame in det_frames:
+            detections = create_detections(self.source, frame, self.min_height)
+            bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
+            score = np.asarray([d.confidence for d in detections])
+
+            bboxes[frame-1] = pd.DataFrame({
+                "name": "",
+                "prob": score,
+                "left": bbox[:, 0], "top": bbox[:, 1],
+                "right": bbox[:, 2], "bot": bbox[:, 3]
+            })
+
+        return pd.Series(bboxes)
+
+    def update_detections(self, bboxes):
+        for bbox, det in zip(bboxes.itertuples(), self.prev_detections):
+            left = bbox.left
+            top = bbox.top
+            width = bbox.right - bbox.left
+            height = bbox.bot - bbox.top
+            det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
 
 def pick_mot16_poi_bboxes(path, det_prefix=None, min_height=0):
     src_id = split(path)[-1]
@@ -81,12 +140,12 @@ def pick_mot16_poi_bboxes(path, det_prefix=None, min_height=0):
         det_prefix = \
             "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
     detection_file = join(det_prefix, src_id+".npy")
-    poi_det = np.load(detection_file)
-    det_frames = np.unique(poi_det[:, 0].astype(np.int))
+    det_source = np.load(detection_file)
+    det_frames = np.unique(det_source[:, 0].astype(np.int))
 
     bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
     for frame in det_frames:
-        detections = create_detections(poi_det, frame, min_height)
+        detections = create_detections(det_source, frame, min_height)
         bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
         score = np.asarray([d.confidence for d in detections])
 
@@ -101,11 +160,12 @@ def pick_mot16_poi_bboxes(path, det_prefix=None, min_height=0):
 
 def eval_mot16_sort(src_id, prefix="MOT16/train",
                     thresh=0.0, baseline=False, worst=False, cost_thresh=40000):
-    # mot = MOT16(src_id, mapper=DeepSORTMapper())
-    mot = MOT16(src_id, mapper=SimpleMapper(log_id=src_id))
+    # mot = MOT16(src_id)
+    mot = MOT16_SORT(src_id)
+    bboxes = mot.pick_bboxes()
 
     movie = join(prefix, src_id)
-    bboxes = pick_mot16_poi_bboxes(movie)
+    # bboxes = pick_mot16_poi_bboxes(movie)
     flow, header = get_flow(movie, prefix=".")
 
     cap, out = open_video(movie)
@@ -116,7 +176,7 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
 
     for index, bbox in enumerate(bboxes):
         if not bbox.empty:
-            bboxes[index] = bbox.query(f"prob > {thresh}")
+            bboxes[index] = bbox.query(f"prob >= {thresh}")
 
     pos = 0
     for i in trange(count):
@@ -127,18 +187,18 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
         if baseline:
             pos = i
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i, bboxes[pos], do_mapping=True)
+            mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         elif header["pict_type"][i] == "I":
             pos = i
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i, bboxes[pos], do_mapping=True)
+            mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         elif worst:
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i, bboxes[pos], do_mapping=False)
+            mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i, bboxes[pos], do_mapping=False)
+            mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
