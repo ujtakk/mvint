@@ -33,9 +33,9 @@ def iou(bbox, candidates):
                np.minimum(bbox_br[1], candidates_br[:, 1])[:, np.newaxis]]
     wh = np.maximum(0., br - tl)
 
-    area_intersection = wh.prod(axis=1)
-    area_bbox = bbox[2:].prod()
-    area_candidates = candidates[:, 2:].prod(axis=1)
+    area_intersection = wh.prod(axis=1) + 1
+    area_bbox = bbox[2:].prod() + 1
+    area_candidates = candidates[:, 2:].prod(axis=1) + 1
     return area_intersection / (area_bbox + area_candidates - area_intersection)
 
 

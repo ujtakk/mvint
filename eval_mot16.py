@@ -43,11 +43,7 @@ class MOT16:
         self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
 
         self.prev_bboxes = pd.DataFrame()
-        # self.mapper = SimpleMapper(cost_thresh=cost_thresh, log_id=src_id)
-        self.mapper = SimpleMapper(log_id=src_id)
-
-    # def __del__(self):
-    #     self.dst_fd.close()
+        self.mapper = SimpleMapper()
 
     def pick_bboxes(self):
         det = detinfo(self.src_path)
@@ -73,16 +69,15 @@ class MOT16:
             self.mapper.set(bboxes, self.prev_bboxes)
 
         names = []
-        for bbox in bboxes.itertuples():
-            obj_id = self.mapper.get(bbox)
-            names.append(str(obj_id))
+        for bbox_id, bbox_body in self.mapper.get(bboxes):
+            names.append(str(bbox_id))
 
-            left = bbox.left
-            top = bbox.top
-            width = bbox.right - bbox.left
-            height = bbox.bot - bbox.top
+            left = bbox_body.left
+            top = bbox_body.top
+            width = bbox_body.right - bbox_body.left
+            height = bbox_body.bot - bbox_body.top
 
-            print(f"{fnum},{obj_id},{left},{top},{width},{height},-1,-1,-1,-1",
+            print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
         bboxes["name"] = names
 
@@ -170,7 +165,6 @@ def eval_mot16_pred(args, prefix="MOT16/train",
         elif worst:
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
-            # mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes)
