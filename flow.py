@@ -14,13 +14,14 @@ import numpy as np
 import pandas as pd
 import tqdm
 
-GREP_CMD = "/bin/grep"
+GREP_CMD = "/usr/bin/env grep"
 FLOW_CMD = join("mpegflow", "mpegflow")
 VIS_CMD = join("mpegflow", "vis")
 
 # refer to gpac/src/media_tools/av_parsers.c for profile and level
 # TODO: profile and level option for mpeg4 in ffmpeg won't be active.
-def dump_flow(movie, occupancy=False, profile="0", level="8", prefix=None):
+def dump_flow(movie, occupancy=False, prefix=None,
+              profile="0", level="8", movie_type="h264"):
     if prefix is None:
         prefix = movie
 
@@ -35,10 +36,21 @@ def dump_flow(movie, occupancy=False, profile="0", level="8", prefix=None):
     movie_name = join(movie, basename(movie))
     if not exists(movie_name+".avi"):
         if exists(movie_name+".mp4"):
-            run(f"ffmpeg -y -i {movie_name+'.mp4'} \
-                  -codec:v mpeg4 -profile:v {profile} -level {level} \
-                  {movie_name+'.avi'}",
-                shell=True)
+            if movie_type == "h264":
+                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
+                      -codec:v libx264 -profile:v baseline -g 12 \
+                      {movie_name+'.avi'}",
+                    shell=True)
+            elif movie_type == "mpeg2":
+                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
+                      -codec:v mpeg2video \
+                      {movie_name+'.avi'}",
+                    shell=True)
+            else:
+                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
+                      -codec:v mpeg4 -profile:v {profile} -level {level} \
+                      {movie_name+'.avi'}",
+                    shell=True)
         else:
             print(movie_name)
             raise Exception("source movie doesn't exist.")

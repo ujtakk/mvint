@@ -34,20 +34,20 @@ def map_flow(flow, frame):
 
     return flow_map, index_rate
 
-def interp_linear_unit(bbox, flow_map, index_rate):
+# def interp_linear_unit(bbox, flow_map, index_rate, filling_rate=0.5):
+def interp_linear_unit(bbox, flow_map, index_rate, filling_rate=0.85):
     inner_flow = flow_map[bbox.top:bbox.bot, bbox.left:bbox.right, :]
     if inner_flow.size == 0:
         flow_mean = np.nan
     else:
         flow_mean = np.nanmean(inner_flow, axis=(0, 1))
     flow_mean = np.nan_to_num(flow_mean)
-    frame_mean = index_rate * flow_mean
 
+    # macroblock_mean / n_pixels -> macroblock_mean / n_macroblocks
+    # (n_macroblocks ~ n_pixels / index_rate ** 2)
+    frame_mean = index_rate**2 * flow_mean
     # TODO: divide each corner
-    # frame_mean = -np.sign(frame_mean) * (frame_mean ** 2)
-    # frame_mean *= 2.0 * index_rate
-    frame_mean *= index_rate
-
+    frame_mean *= 1.0 / filling_rate
 
     left  = bbox.left + frame_mean[0]
     top   = bbox.top + frame_mean[1]
@@ -123,10 +123,10 @@ def vis_interp(movie, header, flow, bboxes, full=False, base=False):
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
 
-        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
-        cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+        # cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+        # cv2.putText(frame,
+        #             f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+        #             cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
         out.write(frame_drawed)
 
@@ -149,6 +149,9 @@ def main():
 
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
+    # for index, bbox in enumerate(bboxes):
+    #     if not bbox.empty:
+    #         bboxes[index] = bbox.query(f"prob >= 0.4")
     vis_interp(args.movie, header, flow, bboxes,
                full=args.full, base=args.base)
 

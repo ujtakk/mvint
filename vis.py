@@ -11,7 +11,7 @@ from flow import draw_flow
 from draw import draw_none
 from annotate import draw_bboxes
 
-def open_video(movie, postfix="out"):
+def open_video(movie, postfix="out", use_out=True):
     movie_name = join(movie, basename(movie))
     if not exists(movie_name+".mp4"):
         if exists(movie_name+".avi"):
@@ -27,13 +27,16 @@ def open_video(movie, postfix="out"):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    out_file = basename(movie) + f"_{postfix}.mp4"
-    if exists(out_file):
-        os.remove(out_file)
-    fourcc = cv2.VideoWriter_fourcc(*"avc1")
-    out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
+    if use_out:
+        out_file = basename(movie) + f"_{postfix}.mp4"
+        if exists(out_file):
+            os.remove(out_file)
+        fourcc = cv2.VideoWriter_fourcc(*"avc1")
+        out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
 
-    return cap, out
+        return cap, out
+    else:
+        return cap
 
 def vis(movie, header, draw=draw_none):
     cap, out = open_video(movie)
