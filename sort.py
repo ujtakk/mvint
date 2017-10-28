@@ -141,10 +141,6 @@ class DeepSORTMapper(Mapper):
         else:
             self.predict()
             self.update(next_detections)
-        # self.predict()
-        # self.update(prev_detections)
-        # self.predict()
-        # self.update(next_detections)
 
     def get(self, bboxes):
         for track in self.tracks:
@@ -173,20 +169,20 @@ class MOT16_SORT:
         else:
             self.mapper.set(None, self.prev_detections, use_prev=True)
 
+        # if do_mapping:
+        #     self.mapper.set(bboxes, self.prev_bboxes)
+
         for bbox_id, bbox_body in self.mapper.get(bboxes):
             left = bbox_body.left
             top = bbox_body.top
             width = bbox_body.right - bbox_body.left
             height = bbox_body.bot - bbox_body.top
-            # left = bbox_body[0]
-            # top = bbox_body[1]
-            # width = bbox_body[2]
-            # height = bbox_body[3]
 
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
 
         self.update_detections(bboxes)
+        # self.prev_bboxes = bboxes
 
     SORT_PREFIX = \
         "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
@@ -202,8 +198,8 @@ class MOT16_SORT:
         self.source = np.load(detection_file)
 
         self.min_height = 0
-        # self.prev_detections = \
-        #     create_detections(self.source, 1, self.min_height)
+        # self.prev_bboxes = pd.DataFrame()
+        # self.mapper = SimpleMapper()
         self.prev_detections = []
         self.mapper = DeepSORTMapper()
 
@@ -264,7 +260,6 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
     bboxes = mot.pick_bboxes()
 
     movie = join(prefix, src_id)
-    # bboxes = pick_mot16_poi_bboxes(movie)
     flow, header = get_flow(movie, prefix=".")
 
     cap, out = open_video(movie)

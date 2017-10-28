@@ -22,9 +22,9 @@ from vis import open_video
 def convert_seq(path):
     conf = seqinfo(path)
 
-    fps = conf['frameRate']
-    name = conf['name']
-    ext = conf['imExt']
+    fps = conf['frameRate'][0]
+    name = conf['name'][0]
+    ext = conf['imExt'][0]
     run(f"ffmpeg -r {fps} -i {path}/img1/%06d{ext} {path}/{name}.mp4",
         shell=True)
 
@@ -231,15 +231,15 @@ def main():
         with Pool(8) as p:
             p.map(convert_seq, glob("/home/work/vision/MOT/MOT16/train/*"))
             p.map(convert_seq, glob("/home/work/vision/MOT/MOT16/test/*"))
-
-    D = MOT16Dataset("/home/work/vision/MOT/MOT16")
-    print(D.seqinfo)
-    arglist = [np.sort(D.gtinfo[name]["class"].unique())
-               for name in D.seqinfo["name"].unique()]
-    print(arglist)
-    print(gtinfo("/home/work/vision/MOT/MOT16/train/MOT16-02"))
-    print(detinfo("/home/work/vision/MOT/MOT16/test/MOT16-01"))
-    # print(D.imgs)
+    else:
+        D = MOT16Dataset("/home/work/vision/MOT/MOT16")
+        print(D.seqinfo)
+        arglist = [np.sort(D.gtinfo[name]["class"].unique())
+                   for name in D.seqinfo["name"].unique()]
+        print(arglist)
+        print(gtinfo("/home/work/vision/MOT/MOT16/train/MOT16-02"))
+        print(detinfo("/home/work/vision/MOT/MOT16/test/MOT16-01"))
+        # print(D.imgs)
 
 if __name__ == "__main__":
     main()

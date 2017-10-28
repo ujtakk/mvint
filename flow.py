@@ -20,41 +20,35 @@ VIS_CMD = join("mpegflow", "vis")
 
 # refer to gpac/src/media_tools/av_parsers.c for profile and level
 # TODO: profile and level option for mpeg4 in ffmpeg won't be active.
-def dump_flow(movie, occupancy=False, prefix=None,
-              profile="0", level="8", movie_type="h264"):
+def dump_flow(movie, prefix=None,
+              codec="h264", profile="0", level="8"):
     if prefix is None:
         prefix = movie
+
+    movie_name = join(movie, basename(movie))
+    if not exists(movie_name+".avi"):
+        if not exists(movie_name+".mp4"):
+            print(movie_name)
+            raise Exception("source movie doesn't exist.")
+
+        option = {
+            "h264": f"-codec:v libx264 -profile:v baseline -g 2",
+            "mpeg4": f"-codec:v mpeg4 -profile:v {profile} -level {level}",
+            "mpeg2": f"-codec:v mpeg2video",
+        }
+
+        if codec not in option:
+            print(codec)
+            Exception("Specified movie type is not supported.")
+
+        run(f"ffmpeg -y -i {movie_name+'.mp4'} {option[codec]} {movie_name+'.avi'}",
+            shell=True)
+
+    movie_file = movie_name + ".avi"
 
     flow_dir = join(prefix, "mpegflow_dump")
     if not exists(flow_dir):
         os.makedirs(flow_dir)
-
-    vis_dir = join(prefix, "vis_dump")
-    if not exists(vis_dir):
-        os.makedirs(vis_dir)
-
-    movie_name = join(movie, basename(movie))
-    if not exists(movie_name+".avi"):
-        if exists(movie_name+".mp4"):
-            if movie_type == "h264":
-                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
-                      -codec:v libx264 -profile:v baseline -g 12 \
-                      {movie_name+'.avi'}",
-                    shell=True)
-            elif movie_type == "mpeg2":
-                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
-                      -codec:v mpeg2video \
-                      {movie_name+'.avi'}",
-                    shell=True)
-            else:
-                run(f"ffmpeg -y -i {movie_name+'.mp4'} \
-                      -codec:v mpeg4 -profile:v {profile} -level {level} \
-                      {movie_name+'.avi'}",
-                    shell=True)
-        else:
-            print(movie_name)
-            raise Exception("source movie doesn't exist.")
-    movie_file = movie_name + ".avi"
 
     # extract motion vectors
     flow_base = join(flow_dir, basename(movie))
@@ -63,19 +57,6 @@ def dump_flow(movie, occupancy=False, prefix=None,
     if not exists(flow_base+"_header.txt"):
         run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
             shell=True)
-
-    # visualize motion vectors
-    if not glob.glob(join(vis_dir, "*.png")):
-        run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
-            shell=True)
-
-    # visualize motion vectors and occupancy info
-    if occupancy:
-        occu_dir = join(movie, "vis_dump_occupancy")
-        os.makedirs(occu_dir)
-
-        run(f"{FLOW_CMD} --occupancy {movie_file} | {VIS_CMD} --occupancy {movie_file} {occu_dir}",
-             shell=True)
 
 def pick_flow(movie, prefix=None):
     if prefix is None:
@@ -115,8 +96,29 @@ def pick_flow(movie, prefix=None):
 
     return data, header
 
-def get_flow(movie, occupancy=False, prefix=None):
-    dump_flow(movie, occupancy, prefix=prefix)
+def get_flow(movie, vis=False, occupancy=False, prefix=None):
+    dump_flow(movie, prefix=prefix)
+
+    if vis:
+        vis_dir = join(prefix, "vis_dump")
+        if not exists(vis_dir):
+            os.makedirs(vis_dir)
+
+        # visualize motion vectors
+        if not glob.glob(join(vis_dir, "*.png")):
+            run(f"{FLOW_CMD} {movie_file} | {VIS_CMD} {movie_file} {vis_dir}",
+                shell=True)
+
+    # visualize motion vectors and occupancy info
+    if occupancy:
+        occu_dir = join(movie, "vis_dump_occupancy")
+        if not exists(occu_dir):
+            os.makedirs(occu_dir)
+
+        run(f"{FLOW_CMD} --occupancy {movie_file} "
+            + "| {VIS_CMD} --occupancy {movie_file} {occu_dir}",
+             shell=True)
+
     flow = pick_flow(movie, prefix=prefix)
 
     return flow
