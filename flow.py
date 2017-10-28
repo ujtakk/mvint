@@ -32,7 +32,7 @@ def dump_flow(movie, prefix=None,
             raise Exception("source movie doesn't exist.")
 
         option = {
-            "h264": f"-codec:v libx264 -profile:v baseline -g 2",
+            "h264": f"-codec:v libx264 -sc_threshold 0 -g 12 -b_strategy 0 -bf 2",
             "mpeg4": f"-codec:v mpeg4 -profile:v {profile} -level {level}",
             "mpeg2": f"-codec:v mpeg2video",
         }

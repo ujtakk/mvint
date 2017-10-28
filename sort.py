@@ -152,25 +152,25 @@ class DeepSORTMapper(Mapper):
 
 class MOT16_SORT:
     def eval_frame(self, fnum, bboxes, do_mapping=False):
-        if do_mapping:
-            min_confidence = 0.3
-            detections = create_detections(self.source, fnum, self.min_height)
-            detections = [d for d in detections
-                          if d.confidence >= min_confidence]
-            # nms_max_overlap = 1.0
-            # boxes = np.array([d.tlwh for d in detections])
-            # scores = np.array([d.confidence for d in detections])
-            # self.indices = preprocessing.non_max_suppression(
-            #     boxes, nms_max_overlap, scores)
-            # detections = [detections[i] for i in self.indices]
-            assert len(detections) == len(bboxes)
-            self.mapper.set(detections, self.prev_detections)
-            self.prev_detections = detections
-        else:
-            self.mapper.set(None, self.prev_detections, use_prev=True)
-
         # if do_mapping:
-        #     self.mapper.set(bboxes, self.prev_bboxes)
+        #     min_confidence = 0.3
+        #     detections = create_detections(self.source, fnum, self.min_height)
+        #     detections = [d for d in detections
+        #                   if d.confidence >= min_confidence]
+        #     # nms_max_overlap = 1.0
+        #     # boxes = np.array([d.tlwh for d in detections])
+        #     # scores = np.array([d.confidence for d in detections])
+        #     # self.indices = preprocessing.non_max_suppression(
+        #     #     boxes, nms_max_overlap, scores)
+        #     # detections = [detections[i] for i in self.indices]
+        #     assert len(detections) == len(bboxes)
+        #     self.mapper.set(detections, self.prev_detections)
+        #     self.prev_detections = detections
+        # else:
+        #     self.mapper.set(None, self.prev_detections, use_prev=True)
+
+        if do_mapping:
+            self.mapper.set(bboxes, self.prev_bboxes)
 
         for bbox_id, bbox_body in self.mapper.get(bboxes):
             left = bbox_body.left
@@ -181,8 +181,8 @@ class MOT16_SORT:
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
 
-        self.update_detections(bboxes)
-        # self.prev_bboxes = bboxes
+        # self.update_detections(bboxes)
+        self.prev_bboxes = bboxes
 
     SORT_PREFIX = \
         "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
@@ -198,10 +198,10 @@ class MOT16_SORT:
         self.source = np.load(detection_file)
 
         self.min_height = 0
-        # self.prev_bboxes = pd.DataFrame()
-        # self.mapper = SimpleMapper()
-        self.prev_detections = []
-        self.mapper = DeepSORTMapper()
+        self.prev_bboxes = pd.DataFrame()
+        self.mapper = SimpleMapper()
+        # self.prev_detections = []
+        # self.mapper = DeepSORTMapper()
 
     def pick_bboxes(self):
         det_frames = np.unique(self.source[:, 0].astype(np.int))
