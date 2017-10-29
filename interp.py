@@ -32,18 +32,21 @@ def calc_flow_mean(inner_flow, filling_rate=0.85):
     else:
         # flow_mean = np.mean(inner_flow, axis=0)
 
-        dist = sklearn.mixture.GaussianMixture(n_components=2)
+        # dist = sklearn.mixture.GaussianMixture(n_components=2)
+        dist = sklearn.mixture.BayesianGaussianMixture(n_components=2)
         dist.fit(inner_flow)
         weights = dist.weights_
         means = dist.means_
 
+        # filling_rate = 1.0
         # flow_cand = (means.T / weights).T
+        # flow_mean = np.sum(flow_cand, axis=0)
         # flow_mean = flow_cand[np.argmax(np.linalg.norm(flow_cand, axis=1)), :]
 
         # filling_rate = 1.0
         # flow_mean = np.sum(means, axis=0)
 
-        # index = np.argmin(np.linalg.norm(means, axis=1))
+        # index = np.argmax(np.linalg.norm(means, axis=1))
         # filling_rate = weights[index]
         # flow_mean = means[index, :]
 
@@ -51,8 +54,8 @@ def calc_flow_mean(inner_flow, filling_rate=0.85):
         filling_rate = weights[index]
         flow_mean = means[index, :]
 
-        # TODO: divide each corner
-        flow_mean *= 1.0 / filling_rate
+    # TODO: divide each corner
+    flow_mean *= 1.0 / filling_rate
 
     return flow_mean
 

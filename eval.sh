@@ -17,3 +17,4 @@ rm -rf mpegflow_dump
 # echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.3 --baseline
 # echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.3 --worst
 echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.3
+

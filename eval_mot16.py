@@ -29,7 +29,7 @@ from mot16 import detinfo
 from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
-from interp import draw_i_frame, draw_p_frame, map_flow
+from interp import draw_i_frame, draw_p_frame
 from vis import open_video
 from mapping import SimpleMapper
 from bbox_ssd import predict, setup_model
