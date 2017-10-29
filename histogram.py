@@ -92,7 +92,7 @@ def draw_histogram(i, frame, flow, bboxes, prefix="graph"):
                              f"{prefix}{i}_{bbox.name}{bbox.Index}.jpg")
         plot_bbox(graph, bbox)
 
-def vis(movie, header, flow, bboxes):
+def vis_histogram(movie, header, flow, bboxes):
     graph_prefix = os.path.basename(movie)
     if not os.path.exists(os.path.join("graph", graph_prefix)):
         os.makedirs(os.path.join("graph", graph_prefix))
@@ -137,7 +137,7 @@ def main():
         with open("bboxes.pkl", "wb") as f:
             pickle.dump(bboxes, f, pickle.HIGHEST_PROTOCOL)
 
-    vis(args.movie, header, flow, bboxes)
+    vis_histogram(args.movie, header, flow, bboxes)
 
 if __name__ == "__main__":
     main()

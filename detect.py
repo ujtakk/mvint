@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import chainer
-from chainercv.datasets import voc_detection_label_names
+from chainercv.datasets import voc_bbox_label_names
 from chainercv.links import SSD300
 from chainercv.links import SSD512
 from chainercv import utils
@@ -15,11 +15,11 @@ class Detector:
     def __init__(self, model="ssd300", gpu=-1, pretrained_model="voc0712"):
         if model == "ssd300":
             self.model = SSD300(
-                n_fg_class=len(voc_detection_label_names),
+                n_fg_class=len(voc_bbox_label_names),
                 pretrained_model=pretrained_model)
         elif model == "ssd512":
             self.model = SSD512(
-                n_fg_class=len(voc_detection_label_names),
+                n_fg_class=len(voc_bbox_label_names),
                 pretrained_model=pretrained_model)
 
         if gpu >= 0:
@@ -43,7 +43,7 @@ def detect(image, model="ssd300", gpu=-1, pretrained_model="voc0712"):
     bbox, label, score = detector(image)
 
     vis_bbox(
-        img, bbox, label, score, label_names=voc_detection_label_names)
+        img, bbox, label, score, label_names=voc_bbox_label_names)
     plt.show()
 
 def parseopt():

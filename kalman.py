@@ -12,7 +12,7 @@ from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
-from interp import draw_i_frame, draw_p_frame, map_flow
+from interp import draw_i_frame, draw_p_frame, find_inner, interp_linear_unit
 
 def calc_center(bbox):
     center_y = np.mean((bbox.bot, bbox.top))
@@ -23,7 +23,7 @@ def calc_center(bbox):
 
 # delegated class
 class KalmanInterpolator:
-    def __init__(self, alpha=512, processNoise=1e-3, measurementNoise=1e-3):
+    def __init__(self, alpha=2.0, processNoise=1e-3, measurementNoise=1e-3):
         self.kalman = cv2.KalmanFilter(2, 2, 2)
         self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
         self.kalman.controlMatrix = np.float32(alpha * np.eye(2))
@@ -85,54 +85,48 @@ class KalmanInterpolator:
 
         return state.flatten()
 
-def interp_kalman_unit(bbox, flow_map, index_rate, kalman):
-    flow_mean = np.mean(flow_map[bbox.top:bbox.bot, bbox.left:bbox.right,
-                                 :], axis=(0, 1))
-    flow_mean = np.nan_to_num(flow_mean)
+def calc_flow_mean_kalman(inner_flow, bbox, kalman):
+    if inner_flow.shape[0] < 2:
+        flow_mean = np.zeros(2, dtype=np.float32)
+    else:
+        flow_mean = np.mean(inner_flow, axis=0)
 
-    alpha = 2.0 * index_rate ** 2
     center = calc_center(bbox)
 
     new_center = kalman.filter(flow_mean)
 
     frame_mean = new_center - center
 
-    left  = bbox.left + frame_mean[0]
-    top   = bbox.top + frame_mean[1]
-    right = bbox.right + frame_mean[0]
-    bot   = bbox.bot + frame_mean[1]
-
-    height = flow_map.shape[0]
-    width = flow_map.shape[1]
-
-    left  = np.clip(left, 0, width-1).astype(np.int)
-    top   = np.clip(top, 0, height-1).astype(np.int)
-    right = np.clip(right, 0, width-1).astype(np.int)
-    bot   = np.clip(bot, 0, height-1).astype(np.int)
-
-    return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot}), frame_mean
+    return frame_mean
 
 def interp_kalman(bboxes, flow, frame, kalman):
-    flow_map, index_rate = map_flow(flow, frame)
+    frame_rows = frame.shape[0]
+    frame_cols = frame.shape[1]
+    assert(frame.shape[2] == 3)
 
-    frame_means = []
+    rows = flow.shape[0]
+    cols = flow.shape[1]
+    assert(flow.shape[2] == 2)
+
+    flow_index = np.asarray(tuple(np.ndindex((rows, cols))))
+    index_rate = np.asarray((frame_rows // rows, frame_cols // cols))
+    frame_index = flow_index * index_rate + (index_rate // 2)
+
     for bbox in bboxes.itertuples():
-        idx = bbox.Index
-        bboxes.loc[idx], frame_mean = \
-            interp_kalman_unit(bbox, flow_map, index_rate, kalman)
-        frame_means.append(frame_mean)
+        inner_flow = find_inner(flow, bbox, flow_index, frame_index)
+        flow_mean = calc_flow_mean_kalman(inner_flow, bbox, kalman)
+        bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
-    return bboxes, frame_means
+    return bboxes
 
-def vis_kalman(movie, header, flow, bboxes, full=False, base=False):
-    if full and base:
+def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
+    if base and worst:
         raise "rendering mode could not be duplicated"
 
-    if full:
-        cap, out = open_video(movie, postfix="full")
-    elif base:
+    if base:
         cap, out = open_video(movie, postfix="base")
+    elif worst:
+        cap, out = open_video(movie, postfix="worst")
     else:
         cap, out = open_video(movie)
 
@@ -150,13 +144,14 @@ def vis_kalman(movie, header, flow, bboxes, full=False, base=False):
         if ret is False or i > bboxes.size:
             break
 
-        if header["pict_type"][i] == "I":
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+        if base:
             pos = i
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        elif header["pict_type"][i] == "I":
+            pos = i
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
             kalman.reset(bboxes[pos])
-        elif full:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
-        elif base:
+        elif worst:
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
         else:
             # bboxes[pos] is updated by reference
@@ -173,14 +168,14 @@ def vis_kalman(movie, header, flow, bboxes, full=False, base=False):
     cap.release()
     out.release()
 
-def vis_composed(movie, header, flow, bboxes, full=False, base=False):
-    if full and base:
+def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
+    if base and worst:
         raise "rendering mode could not be duplicated"
 
-    if full:
-        cap, out = open_video(movie, postfix="full")
-    elif base:
+    if base:
         cap, out = open_video(movie, postfix="base")
+    elif worst:
+        cap, out = open_video(movie, postfix="worst")
     else:
         cap, out = open_video(movie)
 
@@ -209,44 +204,47 @@ def vis_composed(movie, header, flow, bboxes, full=False, base=False):
             break
 
         # linear
-        if header["pict_type"][i] == "I":
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+        if base:
             pos = i
-        elif full:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
-        elif base:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        elif header["pict_type"][i] == "I":
+            pos = i
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        elif worst:
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
 
         # kalman_0
-        if header["pict_type"][i] == "I":
-            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[i], color=color_0)
+        if base:
             pos_0 = i
+            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[pos_0], color=color_0)
+        elif header["pict_type"][i] == "I":
+            pos_0 = i
+            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[pos_0], color=color_0)
             kalman_0.reset(bboxes[pos_0])
-        elif full:
-            frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[i], color=color_0)
-        elif base:
+        elif worst:
             frame_drawed_0 = draw_i_frame(frame_drawed, flow[i], bboxes_0[pos_0], color=color_0)
         else:
             # bboxes[pos_0] is updated by reference
             frame_drawed_0 = draw_p_frame(frame_drawed, flow[i], bboxes_0[pos_0],
-                                        interp=interp_kalman_clos_0, color=color_0)
+                                          interp=interp_kalman_clos_0, color=color_0)
 
         # kalman_1
-        if header["pict_type"][i] == "I":
-            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[i], color=color_1)
+        if base:
             pos_1 = i
+            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[pos_1], color=color_1)
+        elif header["pict_type"][i] == "I":
+            pos_1 = i
+            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[pos_1], color=color_1)
             kalman_1.reset(bboxes[pos_1])
-        elif full:
-            frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[i], color=color_1)
-        elif base:
+        elif worst:
             frame_drawed_1 = draw_i_frame(frame_drawed_0, flow[i], bboxes_1[pos_1], color=color_1)
         else:
             # bboxes[pos_1] is updated by reference
             frame_drawed_1 = draw_p_frame(frame_drawed_0, flow[i], bboxes_1[pos_1],
-                                        interp=interp_kalman_clos_1, color=color_1)
+                                          interp=interp_kalman_clos_1, color=color_1)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -261,10 +259,10 @@ def vis_composed(movie, header, flow, bboxes, full=False, base=False):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
-    parser.add_argument("--full", "-f",
+    parser.add_argument("--base",
                         action="store_true", default=False,
                         help="render P-frame by true bbox")
-    parser.add_argument("--base", "-b",
+    parser.add_argument("--worst",
                         action="store_true", default=False,
                         help="render P-frame by base I-frame's bbox")
     return parser.parse_args()
@@ -275,9 +273,9 @@ def main():
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
     # vis_kalman(args.movie, header, flow, bboxes,
-    #            full=args.full, base=args.base)
+    #            base=args.base, worst=args.worst)
     vis_composed(args.movie, header, flow, bboxes,
-               full=args.full, base=args.base)
+                 base=args.base, worst=args.worst)
 
 if __name__ == "__main__":
     main()

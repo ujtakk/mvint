@@ -8,9 +8,7 @@ import subprocess
 import cv2
 import tqdm
 
-from flow import draw_flow
 from draw import draw_none
-from annotate import draw_bboxes
 
 def open_video(movie, postfix="out", use_out=True):
     movie_name = join(movie, basename(movie))
@@ -54,36 +52,6 @@ def vis(movie, header, draw=draw_none):
     cap.release()
     out.release()
 
-def vis_flow(movie, flow, draw=draw_flow):
-    cap, out = open_video(movie)
-    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    for i in tqdm.trange(count):
-        ret, frame = cap.read()
-        if ret is False:
-            break
-
-        frame_drawed = draw(frame, flow[i])
-        out.write(frame_drawed)
-
-    cap.release()
-    out.release()
-
-def vis_bbox(movie, bboxes, draw=draw_bboxes):
-    cap, out = open_video(movie)
-    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    for i in tqdm.trange(count):
-        ret, frame = cap.read()
-        if ret is False:
-            break
-
-        frame_drawed = draw(frame, bboxes[i])
-        out.write(frame_drawed)
-
-    cap.release()
-    out.release()
-
 def vis_index(movie, header, draw):
     cap, out = open_video(movie)
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -94,28 +62,6 @@ def vis_index(movie, header, draw):
             break
 
         frame_drawed = draw(frame, i)
-        out.write(frame_drawed)
-
-    cap.release()
-    out.release()
-
-def vis_index_pos(movie, header, draw):
-    cap, out = open_video(movie)
-    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    pos = 0
-    for i in tqdm.trange(count):
-        ret, frame = cap.read()
-        if ret is False:
-            break
-
-        cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (10, height-10),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
-        if header["pict_type"][i] == "I":
-            pos = i
-        frame_drawed = draw(frame, i, pos)
         out.write(frame_drawed)
 
     cap.release()

@@ -8,13 +8,73 @@ import numpy as np
 import pandas as pd
 import cv2
 from tqdm import trange
+import sklearn.mixture
 
 from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
 
-def map_flow(flow, frame):
+def find_inner(flow, bbox, flow_index, frame_index):
+    mask_y = (bbox.top <= frame_index[:, 0]) \
+           * (frame_index[:, 0] < bbox.bot)
+    mask_x = (bbox.left <= frame_index[:, 1]) \
+           * (frame_index[:, 1] < bbox.right)
+    mask = mask_y * mask_x
+
+    inner_flow = flow[flow_index[mask, 0], flow_index[mask, 1], :]
+
+    return inner_flow.astype(np.float32)
+
+def calc_flow_mean(inner_flow, filling_rate=0.85):
+    if inner_flow.shape[0] < 2:
+        flow_mean = np.zeros(2)
+    else:
+        # flow_mean = np.mean(inner_flow, axis=0)
+
+        dist = sklearn.mixture.GaussianMixture(n_components=2)
+        dist.fit(inner_flow)
+        weights = dist.weights_
+        means = dist.means_
+
+        # flow_cand = (means.T / weights).T
+        # flow_mean = flow_cand[np.argmax(np.linalg.norm(flow_cand, axis=1)), :]
+
+        # filling_rate = 1.0
+        # flow_mean = np.sum(means, axis=0)
+
+        # index = np.argmin(np.linalg.norm(means, axis=1))
+        # filling_rate = weights[index]
+        # flow_mean = means[index, :]
+
+        index = np.argmax(weights)
+        filling_rate = weights[index]
+        flow_mean = means[index, :]
+
+        # TODO: divide each corner
+        flow_mean *= 1.0 / filling_rate
+
+    return flow_mean
+
+# def interp_linear_unit(bbox, flow_map, index_rate, filling_rate=0.5):
+def interp_linear_unit(bbox, flow_mean, frame):
+    left  = bbox.left + flow_mean[0]
+    top   = bbox.top + flow_mean[1]
+    right = bbox.right + flow_mean[0]
+    bot   = bbox.bot + flow_mean[1]
+
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
+
+def interp_linear(bboxes, flow, frame):
     frame_rows = frame.shape[0]
     frame_cols = frame.shape[1]
     assert(frame.shape[2] == 3)
@@ -23,59 +83,16 @@ def map_flow(flow, frame):
     cols = flow.shape[1]
     assert(flow.shape[2] == 2)
 
-    flow_map = np.zeros((frame_rows, frame_cols,  2), dtype=np.float32)
-
-    base_index = np.asarray(tuple(np.ndindex((rows, cols))))
+    flow_index = np.asarray(tuple(np.ndindex((rows, cols))))
     index_rate = np.asarray((frame_rows // rows, frame_cols // cols))
-    flow_index = base_index * index_rate + (index_rate // 2)
-    for i in range(flow.size//2):
-        flow_map[flow_index[i][0], flow_index[i][1], :] = \
-            flow[base_index[i][0], base_index[i][1], :]
+    frame_index = flow_index * index_rate + (index_rate // 2)
 
-    return flow_map, index_rate
-
-# def interp_linear_unit(bbox, flow_map, index_rate, filling_rate=0.5):
-def interp_linear_unit(bbox, flow_map, index_rate, filling_rate=0.85):
-    inner_flow = flow_map[bbox.top:bbox.bot, bbox.left:bbox.right, :]
-    if inner_flow.size == 0:
-        flow_mean = np.nan
-    else:
-        flow_mean = np.nanmean(inner_flow, axis=(0, 1))
-    flow_mean = np.nan_to_num(flow_mean)
-
-    # macroblock_mean / n_pixels -> macroblock_mean / n_macroblocks
-    # (n_macroblocks ~ n_pixels / index_rate ** 2)
-    frame_mean = index_rate**2 * flow_mean
-    # TODO: divide each corner
-    frame_mean *= 1.0 / filling_rate
-
-    left  = bbox.left + frame_mean[0]
-    top   = bbox.top + frame_mean[1]
-    right = bbox.right + frame_mean[0]
-    bot   = bbox.bot + frame_mean[1]
-
-    height = flow_map.shape[0]
-    width = flow_map.shape[1]
-
-    left  = np.clip(left, 0, width-1).astype(np.int)
-    top   = np.clip(top, 0, height-1).astype(np.int)
-    right = np.clip(right, 0, width-1).astype(np.int)
-    bot   = np.clip(bot, 0, height-1).astype(np.int)
-
-    return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot}), frame_mean
-
-def interp_linear(bboxes, flow, frame):
-    flow_map, index_rate = map_flow(flow, frame)
-
-    frame_means = []
     for bbox in bboxes.itertuples():
-        idx = bbox.Index
-        bboxes.loc[idx], frame_mean = \
-            interp_linear_unit(bbox, flow_map, index_rate)
-        frame_means.append(frame_mean)
+        inner_flow = find_inner(flow, bbox, flow_index, frame_index)
+        flow_mean = calc_flow_mean(inner_flow)
+        bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
-    return bboxes, frame_means
+    return bboxes
 
 def interp_none(bboxes, flow, frame):
     return bboxes
@@ -87,18 +104,18 @@ def draw_i_frame(frame, flow, bboxes, color=(0, 255, 0)):
 
 def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear, color=(0, 255, 0)):
     frame = draw_flow(frame, flow)
-    interp_bboxes, frame_means = interp(base_bboxes, flow, frame)
-    frame = draw_bboxes(frame, interp_bboxes, frame_means, color=color)
+    interp_bboxes = interp(base_bboxes, flow, frame)
+    frame = draw_bboxes(frame, interp_bboxes, color=color)
     return frame
 
-def vis_interp(movie, header, flow, bboxes, full=False, base=False):
-    if full and base:
+def vis_interp(movie, header, flow, bboxes, base=False, worst=False):
+    if base and worst:
         raise "rendering mode could not be duplicated"
 
-    if full:
-        cap, out = open_video(movie, postfix="full")
-    elif base:
+    if base:
         cap, out = open_video(movie, postfix="base")
+    elif worst:
+        cap, out = open_video(movie, postfix="worst")
     else:
         cap, out = open_video(movie)
 
@@ -112,21 +129,22 @@ def vis_interp(movie, header, flow, bboxes, full=False, base=False):
         if ret is False or i > bboxes.size:
             break
 
-        if header["pict_type"][i] == "I":
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
+        if base:
             pos = i
-        elif full:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[i])
-        elif base:
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        elif header["pict_type"][i] == "I":
+            pos = i
+            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+        elif worst:
             frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
         else:
             # bboxes[pos] is updated by reference
             frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
 
-        # cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
-        # cv2.putText(frame,
-        #             f"pict_type: {header['pict_type'][i]}", (width-210, 50),
-        #             cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+        cv2.putText(frame,
+                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
         out.write(frame_drawed)
 
@@ -136,10 +154,10 @@ def vis_interp(movie, header, flow, bboxes, full=False, base=False):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
-    parser.add_argument("--full", "-f",
+    parser.add_argument("--base",
                         action="store_true", default=False,
                         help="render P-frame by true bbox")
-    parser.add_argument("--base", "-b",
+    parser.add_argument("--worst",
                         action="store_true", default=False,
                         help="render P-frame by base I-frame's bbox")
     return parser.parse_args()
@@ -153,7 +171,7 @@ def main():
     #     if not bbox.empty:
     #         bboxes[index] = bbox.query(f"prob >= 0.4")
     vis_interp(args.movie, header, flow, bboxes,
-               full=args.full, base=args.base)
+               base=args.base, worst=args.worst)
 
 if __name__ == "__main__":
     main()

@@ -55,7 +55,7 @@ def parseopt():
 def main():
     args = parseopt()
     dump_flow(args.movie)
-    flow = pick_flow(args.movie)
+    flow, header = pick_flow(args.movie)
     detector = Detector(gpu=args.gpu)
     draw_box_flow_func = \
         lambda movie, flow: draw_box_flow(movie, flow, detector)

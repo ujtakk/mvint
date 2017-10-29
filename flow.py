@@ -14,37 +14,35 @@ import numpy as np
 import pandas as pd
 import tqdm
 
+from vis import open_video
+
 GREP_CMD = "/usr/bin/env grep"
 FLOW_CMD = join("mpegflow", "mpegflow")
 VIS_CMD = join("mpegflow", "vis")
 
 # refer to gpac/src/media_tools/av_parsers.c for profile and level
 # TODO: profile and level option for mpeg4 in ffmpeg won't be active.
-def dump_flow(movie, prefix=None,
-              codec="h264", profile="0", level="8"):
+def dump_flow(movie, prefix=None, codec="h264"):
     if prefix is None:
         prefix = movie
 
     movie_name = join(movie, basename(movie))
     if not exists(movie_name+".avi"):
         if not exists(movie_name+".mp4"):
-            print(movie_name)
             raise Exception("source movie doesn't exist.")
 
         option = {
-            "h264": f"-codec:v libx264 -sc_threshold 0 -g 12 -b_strategy 0 -bf 2",
-            "mpeg4": f"-codec:v mpeg4 -profile:v {profile} -level {level}",
+            # "h264": f"-codec:v libx264 -sc_threshold 0 -g 12 -b_strategy 0 -bf 2",
+            "h264": f"-codec:v libx264 -profile:v baseline -g 12",
+            "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 8",
             "mpeg2": f"-codec:v mpeg2video",
         }
 
         if codec not in option:
-            print(codec)
             Exception("Specified movie type is not supported.")
 
         run(f"ffmpeg -y -i {movie_name+'.mp4'} {option[codec]} {movie_name+'.avi'}",
             shell=True)
-
-    movie_file = movie_name + ".avi"
 
     flow_dir = join(prefix, "mpegflow_dump")
     if not exists(flow_dir):
@@ -53,7 +51,7 @@ def dump_flow(movie, prefix=None,
     # extract motion vectors
     flow_base = join(flow_dir, basename(movie))
     if not exists(flow_base+".txt"):
-        run(f"{FLOW_CMD} {movie_file} > {flow_base+'.txt'}", shell=True)
+        run(f"{FLOW_CMD} {movie_name+'.avi'} > {flow_base+'.txt'}", shell=True)
     if not exists(flow_base+"_header.txt"):
         run(f"{GREP_CMD} '^#' {flow_base+'.txt'} > {flow_base+'_header.txt'}",
             shell=True)
@@ -90,14 +88,16 @@ def pick_flow(movie, prefix=None):
     headers = list(map(convert, open(flow_base+"_header.txt").readlines()))
     header = pd.concat(headers, ignore_index=True)
 
-    data = np.loadtxt(flow_base+".txt").reshape(
+    flow = np.loadtxt(flow_base+".txt").reshape(
             (-1, 2, header["shape_first"][0]//2, header["shape_second"][1]))
-    data = np.moveaxis(data, 1, 3)
+    flow = np.moveaxis(flow, 1, 3)
 
-    return data, header
+    return flow, header
 
 def get_flow(movie, vis=False, occupancy=False, prefix=None):
     dump_flow(movie, prefix=prefix)
+
+    movie_file = join(movie, basename(movie)) + ".avi"
 
     if vis:
         vis_dir = join(prefix, "vis_dump")
@@ -119,9 +119,9 @@ def get_flow(movie, vis=False, occupancy=False, prefix=None):
             + "| {VIS_CMD} --occupancy {movie_file} {occu_dir}",
              shell=True)
 
-    flow = pick_flow(movie, prefix=prefix)
+    flow, header = pick_flow(movie, prefix=prefix)
 
-    return flow
+    return flow, header
 
 def draw_flow(frame, flow):
     def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
@@ -155,6 +155,21 @@ def draw_flow(frame, flow):
 
     return frame
 
+def vis_flow(movie, flow, draw=draw_flow):
+    cap, out = open_video(movie)
+    count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    for i in tqdm.trange(count):
+        ret, frame = cap.read()
+        if ret is False:
+            break
+
+        frame_drawed = draw(frame, flow[i])
+        out.write(frame_drawed)
+
+    cap.release()
+    out.release()
+
 def parseopt():
     parser = argparse.ArgumentParser(
         description="script for extracting motion vectors")
@@ -167,11 +182,9 @@ def parseopt():
     return parser.parse_args()
 
 def main():
-    from vis import vis_flow
-
     args = parseopt()
-    dump_flow(args.movie, args.occupancy)
-    flow = pick_flow(args.movie)
+    dump_flow(args.movie)
+    flow, header = pick_flow(args.movie)
     vis_flow(args.movie, flow)
 
 if __name__ == "__main__":
