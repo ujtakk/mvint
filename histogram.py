@@ -83,7 +83,7 @@ covs:
         fig, axes = plt.subplots(3, 1, figsize=(5, 10),
                                  gridspec_kw = {'height_ratios':[5, 2, 3]})
         axes[0].scatter(inner_flow[:, 1], inner_flow[:, 0], alpha=0.2)
-        axes[0].scatter(means[:, 0], means[:, 1], color="r", alpha=0.8)
+        axes[0].scatter(means[:, 0], means[:, 1], color="r", alpha=0.4)
         axes[0] = plot_density(axes[0], dist)
 
         axes[1].axis("off")
