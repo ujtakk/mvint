@@ -97,7 +97,6 @@ class SimpleMapper(Mapper):
         self.cost_thresh = cost_thresh
         self.id_count = 1
         self.ids = dict()
-        np.set_printoptions(linewidth=200)
 
     def _assign_id(self):
         new_id = self.id_count
@@ -114,7 +113,7 @@ class SimpleMapper(Mapper):
             if bbox.Index in col_idx:
                 arg_idx = np.where(col_idx == bbox.Index)[0][0]
                 trans_cost = cost[row_idx, col_idx][arg_idx]
-                if trans_cost < self.cost_thresh:
+                if trans_cost <= self.cost_thresh:
                     id_map[bbox.Index] = self.ids[row_idx[arg_idx]]
                 else:
                     id_map[bbox.Index] = self._assign_id()

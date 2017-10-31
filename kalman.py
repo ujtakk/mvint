@@ -31,33 +31,34 @@ class KalmanInterpolator:
         # self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
         # self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
 
-        self.kalman = cv2.KalmanFilter(4, 2, 2)
+        self.dp, self.mp, self.cp = 4, 2, 2
+        self.kalman = cv2.KalmanFilter(self.dp, self.mp, self.cp)
         self.kalman.transitionMatrix = (1.0 * np.asarray([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
             [0, 0, 1, 0],
             [0, 0, 0, 1],
-        ]).astype(np.float32)
+        ])).astype(np.float32)
         self.kalman.controlMatrix = (1.0 * np.asarray([
             [1, 0],
             [0, 1],
             [1, 0],
             [0, 1],
-        ).astype(np.float32)
+        ])).astype(np.float32)
         self.kalman.measurementMatrix = (1.0 * np.asarray([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
-        ).astype(np.float32)
+        ])).astype(np.float32)
         self.kalman.processNoiseCov = (processNoise * np.asarray([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
             [0, 0, 1, 0],
             [0, 0, 0, 1],
-        ).astype(np.float32)
+        ])).astype(np.float32)
         self.kalman.measurementNoiseCov = (measurementNoise * np.asarray([
             [1, 0],
             [0, 1],
-        ).astype(np.float32)
+        ])).astype(np.float32)
 
         self.total = 0
         self.count = 0
@@ -76,11 +77,11 @@ class KalmanInterpolator:
         for bbox in bboxes.itertuples():
             self.total += 1
             self.stateList.append(
-                    calc_center(bbox).reshape(2, 1).astype(np.float32))
+                np.append(calc_center(bbox), (0, 0)).astype(np.float32))
 
         for i in range(self.total):
             self.errorCovList.append(
-                    (1.0 * np.eye(2)).astype(np.float32))
+                    (1.0 * np.eye(self.dp)).astype(np.float32))
                     # (0.0 * np.eye(2)).astype(np.float32))
 
     def predict(self, control):
@@ -111,7 +112,7 @@ class KalmanInterpolator:
         else:
             self.count += 1
 
-        return state.flatten()
+        return state[0:2].flatten()
 
 def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     center = calc_center(bbox)
@@ -219,7 +220,7 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    kalman = KalmanInterpolator(processNoise=1e-1, measurementNoise=1e-1)
+    kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
     interp_kalman_clos = lambda bboxes, flow, frame: \
             interp_kalman(bboxes, flow, frame, kalman)
 

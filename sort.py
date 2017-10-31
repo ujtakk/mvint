@@ -153,6 +153,25 @@ class DeepSORTMapper(Mapper):
             yield track.track_id, bboxes.loc[bbox_idx]
 
 class MOT16_SORT:
+    SORT_PREFIX = \
+        "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
+
+    def __init__(self, src_id, src_dir=SORT_PREFIX, dst_dir="result"):
+        if not exists(dst_dir):
+            os.makedirs(dst_dir)
+
+        self.src_path = join(src_dir, src_id)
+        self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
+
+        detection_file = self.src_path + ".npy"
+        self.source = np.load(detection_file)
+
+        self.min_height = 0
+        self.prev_bboxes = pd.DataFrame()
+        self.mapper = SimpleMapper()
+        # self.prev_detections = []
+        # self.mapper = DeepSORTMapper()
+
     def eval_frame(self, fnum, bboxes, do_mapping=False):
         # if do_mapping:
         #     min_confidence = 0.3
@@ -183,27 +202,8 @@ class MOT16_SORT:
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
 
-        # self.update_detections(bboxes)
+        # self._update_detections(bboxes)
         self.prev_bboxes = bboxes
-
-    SORT_PREFIX = \
-        "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
-
-    def __init__(self, src_id, src_dir=SORT_PREFIX, dst_dir="result"):
-        if not exists(dst_dir):
-            os.makedirs(dst_dir)
-
-        self.src_path = join(src_dir, src_id)
-        self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
-
-        detection_file = self.src_path + ".npy"
-        self.source = np.load(detection_file)
-
-        self.min_height = 0
-        self.prev_bboxes = pd.DataFrame()
-        self.mapper = SimpleMapper()
-        # self.prev_detections = []
-        # self.mapper = DeepSORTMapper()
 
     def pick_bboxes(self):
         det_frames = np.unique(self.source[:, 0].astype(np.int))
@@ -223,7 +223,7 @@ class MOT16_SORT:
 
         return pd.Series(bboxes)
 
-    def update_detections(self, bboxes):
+    def _update_detections(self, bboxes):
         for bbox, det in zip(bboxes.itertuples(), self.prev_detections):
             left = bbox.left
             top = bbox.top
@@ -231,47 +231,25 @@ class MOT16_SORT:
             height = bbox.bot - bbox.top
             det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
 
-def pick_mot16_poi_bboxes(path, det_prefix=None, min_height=0):
-    src_id = split(path)[-1]
-    if det_prefix is None:
-        det_prefix = \
-            "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
-    detection_file = join(det_prefix, src_id+".npy")
-    det_source = np.load(detection_file)
-    det_frames = np.unique(det_source[:, 0].astype(np.int))
-
-    bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
-    for frame in det_frames:
-        detections = create_detections(det_source, frame, min_height)
-        bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
-        score = np.asarray([d.confidence for d in detections])
-
-        bboxes[frame-1] = pd.DataFrame({
-            "name": "",
-            "prob": score,
-            "left": bbox[:, 0], "top": bbox[:, 1],
-            "right": bbox[:, 2], "bot": bbox[:, 3]
-        })
-
-    return pd.Series(bboxes)
-
-def eval_mot16_sort(src_id, prefix="MOT16/train",
-                    thresh=0.0, baseline=False, worst=False, cost_thresh=40000):
-    # mot = MOT16(src_id)
+def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
+                    baseline=False, worst=False, display=False):
     mot = MOT16_SORT(src_id)
     bboxes = mot.pick_bboxes()
 
     movie = join(prefix, src_id)
     flow, header = get_flow(movie, prefix=".")
 
-    cap, out = open_video(movie)
+    if display:
+        cap, out = open_video(movie, use_out=True)
+    else:
+        cap = open_video(movie, use_out=False)
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     kalman = KalmanInterpolator()
-    kalman = KalmanInterpolator(processNoise=1e-2, measurementNoise=1e-2)
+    kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
     interp_kalman_clos = lambda bboxes, flow, frame: \
             interp_kalman(bboxes, flow, frame, kalman)
 
@@ -287,32 +265,40 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
 
         if baseline:
             pos = i
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
             kalman.reset(bboxes[pos])
         elif header["pict_type"][i] == "I":
             pos = i
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
             kalman.reset(bboxes[pos])
         elif worst:
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
         else:
             # bboxes[pos] is updated by reference
-            frame = draw_p_frame(frame, flow[i], bboxes[pos],
-                                        interp=interp_kalman_clos)
+            if display:
+                frame = draw_p_frame(frame, flow[i], bboxes[pos],
+                                            interp=interp_kalman_clos)
+            else:
+                interp_kalman_clos(bboxes[pos], flow[i], frame)
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
 
-        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
-        cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+        if display:
+            cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+            cv2.putText(frame,
+                        f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+                        cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
-        out.write(frame)
+            out.write(frame)
 
     cap.release()
-    out.release()
+    if display:
+        out.release()
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -322,7 +308,6 @@ def parse_opt():
     parser.add_argument("--worst",
                         action="store_true", default=False)
     parser.add_argument("--thresh", type=float, default=0.3)
-    parser.add_argument("--cost", type=float, default=40000)
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd512")
     parser.add_argument("--param",
@@ -332,14 +317,10 @@ def parse_opt():
 
 def main():
     args = parse_opt()
-    # path = join("MOT16/train", args.src)
-    # bboxes = pick_mot16_poi_bboxes(path)
-    # print(bboxes[42])
     eval_mot16_sort(args.src_id,
                     thresh=args.thresh,
                     baseline=args.baseline,
-                    worst=args.worst,
-                    cost_thresh=args.cost)
+                    worst=args.worst)
 
 if __name__ == "__main__":
     main()

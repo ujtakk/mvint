@@ -44,7 +44,7 @@ def find_inner(flow, bbox, flow_index, frame_index):
 
     return inner_flow.astype(np.float32)
 
-def calc_flow_mean(inner_flow, filling_rate=0.85):
+def calc_flow_mean(inner_flow, filling_rate=1.0):
     if inner_flow.shape[0] < 2:
         return np.zeros(2)
 
