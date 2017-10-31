@@ -24,13 +24,40 @@ def calc_center(bbox):
 # delegated class
 class KalmanInterpolator:
     def __init__(self, processNoise=1e-3, measurementNoise=1e-3):
-        self.kalman = cv2.KalmanFilter(2, 2, 2)
-        self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
-        # self.kalman.controlMatrix = np.float32(1/filling_rate * np.eye(2))
-        self.kalman.controlMatrix = np.float32(1.0 * np.eye(2))
-        self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
-        self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
-        self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
+        # self.kalman = cv2.KalmanFilter(2, 2, 2)
+        # self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
+        # self.kalman.controlMatrix = np.float32(1.0 * np.eye(2))
+        # self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
+        # self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
+        # self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
+
+        self.kalman = cv2.KalmanFilter(4, 2, 2)
+        self.kalman.transitionMatrix = (1.0 * np.asarray([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ]).astype(np.float32)
+        self.kalman.controlMatrix = (1.0 * np.asarray([
+            [1, 0],
+            [0, 1],
+            [1, 0],
+            [0, 1],
+        ).astype(np.float32)
+        self.kalman.measurementMatrix = (1.0 * np.asarray([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+        ).astype(np.float32)
+        self.kalman.processNoiseCov = (processNoise * np.asarray([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ).astype(np.float32)
+        self.kalman.measurementNoiseCov = (measurementNoise * np.asarray([
+            [1, 0],
+            [0, 1],
+        ).astype(np.float32)
 
         self.total = 0
         self.count = 0
