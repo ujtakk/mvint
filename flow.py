@@ -33,8 +33,8 @@ def dump_flow(movie, prefix=None, codec="h264"):
 
         option = {
             # "h264": f"-codec:v libx264 -sc_threshold 0 -g 12 -b_strategy 0 -bf 2",
-            "h264": f"-codec:v libx264 -profile:v baseline -g 12",
-            "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 8",
+            "h264": f"-codec:v libx264 -profile:v baseline -sc_threshold 0 -g 12",
+            "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 8 -sc_threshold 0 -g 12",
             "mpeg2": f"-codec:v mpeg2video",
         }
 
@@ -164,8 +164,8 @@ def vis_flow(movie, flow, draw=draw_flow):
         if ret is False:
             break
 
-        frame_drawed = draw(frame, flow[i])
-        out.write(frame_drawed)
+        frame = draw(frame, flow[i])
+        out.write(frame)
 
     cap.release()
     out.release()

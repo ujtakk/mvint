@@ -109,19 +109,19 @@ def eval_mot16(src_id, prefix="MOT16/train",
 
         if baseline:
             pos = i
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         elif header["pict_type"][i] == "I":
             pos = i
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         elif worst:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
             # mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         else:
             # bboxes[pos] is updated by reference
-            frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
+            frame = draw_p_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -129,7 +129,7 @@ def eval_mot16(src_id, prefix="MOT16/train",
                     f"pict_type: {header['pict_type'][i]}", (width-210, 50),
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
-        out.write(frame_drawed)
+        out.write(frame)
 
     cap.release()
     out.release()
@@ -156,18 +156,18 @@ def eval_mot16_pred(args, prefix="MOT16/train",
 
         if baseline:
             bboxes = predict(model, frame, thresh=thresh)
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes)
+            frame = draw_i_frame(frame, flow[i], bboxes)
             mot.eval_frame(i+1, bboxes, do_mapping=True)
         elif header["pict_type"][i] == "I":
             bboxes = predict(model, frame, thresh=thresh)
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes)
+            frame = draw_i_frame(frame, flow[i], bboxes)
             mot.eval_frame(i+1, bboxes, do_mapping=True)
         elif worst:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
         else:
             # bboxes[pos] is updated by reference
-            frame_drawed = draw_p_frame(frame, flow[i], bboxes)
+            frame = draw_p_frame(frame, flow[i], bboxes)
             mot.eval_frame(i+1, bboxes, do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -175,7 +175,7 @@ def eval_mot16_pred(args, prefix="MOT16/train",
                     f"pict_type: {header['pict_type'][i]}", (width-210, 50),
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
-        out.write(frame_drawed)
+        out.write(frame)
 
     cap.release()
     out.release()

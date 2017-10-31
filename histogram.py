@@ -136,7 +136,7 @@ def draw_histogram(i, frame, flow, bboxes, prefix="graph"):
     plot_bbox = plot(flow, frame, flow_index, frame_index)
     for bbox in bboxes.itertuples():
         graph = os.path.join("graph", prefix,
-                             f"{prefix}_{i}_{bbox.name}{bbox.Index}.pdf")
+                             f"{prefix}_{i}_{bbox.name}{bbox.Index}.jpg")
         plot_bbox(graph, bbox)
 
 def vis_histogram(movie, header, flow, bboxes):

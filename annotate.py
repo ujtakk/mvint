@@ -80,8 +80,8 @@ def vis_annotate(movie, header, draw):
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
         if header["pict_type"][i] == "I":
             pos = i
-        frame_drawed = draw(frame, i, pos)
-        out.write(frame_drawed)
+        frame = draw(frame, i, pos)
+        out.write(frame)
 
     cap.release()
     out.release()

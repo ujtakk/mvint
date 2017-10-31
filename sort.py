@@ -13,6 +13,7 @@ from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
 from interp import draw_i_frame, draw_p_frame
+from kalman import KalmanInterpolator, interp_kalman
 from vis import open_video
 from mapping import Mapper, SimpleMapper
 from bbox_ssd import predict, setup_model
@@ -36,6 +37,7 @@ class DeepSORTMapper(Mapper):
 
     def __init__(self, max_iou_distance=0.7, max_age=30, n_init=3,
                  max_cosine_distance=0.2, nn_budget=100):
+                 # max_cosine_distance=0.0, nn_budget=100):
 
         self.metric = NearestNeighborDistanceMetric(
             "cosine", max_cosine_distance, nn_budget)
@@ -268,6 +270,11 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+    kalman = KalmanInterpolator()
+    kalman = KalmanInterpolator(processNoise=1e-2, measurementNoise=1e-2)
+    interp_kalman_clos = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman)
+
     for index, bbox in enumerate(bboxes):
         if not bbox.empty:
             bboxes[index] = bbox.query(f"prob >= {thresh}")
@@ -280,18 +287,21 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
 
         if baseline:
             pos = i
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
+            kalman.reset(bboxes[pos])
         elif header["pict_type"][i] == "I":
             pos = i
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
+            kalman.reset(bboxes[pos])
         elif worst:
-            frame_drawed = draw_i_frame(frame, flow[i], bboxes[pos])
+            frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
         else:
             # bboxes[pos] is updated by reference
-            frame_drawed = draw_p_frame(frame, flow[i], bboxes[pos])
+            frame = draw_p_frame(frame, flow[i], bboxes[pos],
+                                        interp=interp_kalman_clos)
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -299,7 +309,7 @@ def eval_mot16_sort(src_id, prefix="MOT16/train",
                     f"pict_type: {header['pict_type'][i]}", (width-210, 50),
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
-        out.write(frame_drawed)
+        out.write(frame)
 
     cap.release()
     out.release()
@@ -311,7 +321,7 @@ def parse_opt():
                         action="store_true", default=False)
     parser.add_argument("--worst",
                         action="store_true", default=False)
-    parser.add_argument("--thresh", type=float, default=0.0)
+    parser.add_argument("--thresh", type=float, default=0.3)
     parser.add_argument("--cost", type=float, default=40000)
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd512")

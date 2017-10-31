@@ -46,8 +46,8 @@ def vis(movie, header, draw=draw_none):
         if ret is False:
             break
 
-        frame_drawed = draw(frame)
-        out.write(frame_drawed)
+        frame = draw(frame)
+        out.write(frame)
 
     cap.release()
     out.release()
@@ -61,8 +61,8 @@ def vis_index(movie, header, draw):
         if ret is False:
             break
 
-        frame_drawed = draw(frame, i)
-        out.write(frame_drawed)
+        frame = draw(frame, i)
+        out.write(frame)
 
     cap.release()
     out.release()

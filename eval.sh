@@ -10,8 +10,8 @@ MOT16-11
 MOT16-13
 "
 
-find MOT16/ -name "*.avi" | xargs rm
-rm -rf mpegflow_dump
+# find MOT16/ -name "*.avi" | xargs rm
+# rm -rf mpegflow_dump
 
 # echo $MOT_TRAIN | xargs -P 8 -n 1 -t python eval_mot16.py --thresh 0.1
 # echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.3 --baseline
