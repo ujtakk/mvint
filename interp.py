@@ -28,7 +28,12 @@ def find_inner(flow, bbox, flow_index, frame_index):
            * (frame_index[:, 1] < bbox.right)
     mask = mask_y * mask_x
 
+    if np.sum(mask) == 0:
+        return np.zeros((1, 1, 2)).astype(np.float32)
+
+    mask_shape = flow_index[mask, :][-1] - flow_index[mask, :][0] + 1
     inner_flow = flow[flow_index[mask, 0], flow_index[mask, 1], :]
+    inner_flow = inner_flow.reshape((mask_shape[0], mask_shape[1], -1))
 
     # if np.sum(mask) < 2:
     #     return inner_flow.astype(np.float32)
@@ -44,14 +49,49 @@ def find_inner(flow, bbox, flow_index, frame_index):
 
     return inner_flow.astype(np.float32)
 
+def div_median(inner_flow):
+    # print("inner_flow", inner_flow)
+    flow = inner_flow.reshape((-1, 2))
+    # print("flow", flow)
+    flow_norm = np.linalg.norm(flow, axis=1)
+    # print("flow_norm", flow_norm)
+    norm_index = np.argsort(flow_norm)
+    # print("norm_index", norm_index)
+    lower_median = norm_index[norm_index.shape[0]//4*1]
+    # print("lower_median", flow[lower_median])
+    upper_median = norm_index[norm_index.shape[0]//4*3]
+    # print("upper_median", flow[upper_median])
+    flow_lut = inner_flow[inner_flow.shape[0]//2-1:inner_flow.shape[0]//2+2,
+                          inner_flow.shape[1]//2-1:inner_flow.shape[1]//2+2,
+                          :].reshape((-1, 2))
+    # print("flow_lut", flow_lut)
+    # lut_norm = np.linalg.norm(flow, axis=1)
+    # print("lut_norm", lut_norm)
+    judges = np.linalg.norm(flow_lut-flow[lower_median], axis=1) \
+           < np.linalg.norm(flow_lut-flow[upper_median], axis=1)
+    # print("judges", judges)
+
+    if np.sum(judges) < 5:
+        frame_mean = flow[upper_median, :]
+    else:
+        frame_mean = flow[lower_median, :]
+    # print("frame_mean", frame_mean)
+
+    # print()
+
+    return frame_mean.astype(np.float32)
+
+
 def calc_flow_mean(inner_flow, filling_rate=1.0):
-    if inner_flow.shape[0] < 2:
-        return np.zeros(2)
+    # if inner_flow.shape[0] < 2:
+    #     return np.zeros(2)
 
     # ********************* Your MOT16 Results *********************
     # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
     # 54.6 64.4 47.4| 62.3  84.6  2.35|  517 110  300  107| 12484 41597   803  1502|  50.3  77.9  51.0
-    flow_mean = np.mean(inner_flow, axis=0)
+    # flow_mean = np.mean(inner_flow, axis=0)
+    # flow_mean = np.mean(inner_flow, axis=(0, 1))
+    flow_mean = div_median(inner_flow)
     # TODO: divide each corner
     flow_mean *= 1.0 / filling_rate
 
