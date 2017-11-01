@@ -6,6 +6,10 @@ import argparse
 import cv2
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
 from tqdm import trange
 
 from mot16 import pick_mot16_bboxes, detinfo
@@ -232,7 +236,7 @@ class MOT16_SORT:
             det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
 
 def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
-                    baseline=False, worst=False, display=False):
+                    baseline=False, worst=False, display=True):
     mot = MOT16_SORT(src_id)
     bboxes = mot.pick_bboxes()
 
@@ -248,7 +252,6 @@ def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    kalman = KalmanInterpolator()
     kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
     interp_kalman_clos = lambda bboxes, flow, frame: \
             interp_kalman(bboxes, flow, frame, kalman)
@@ -283,7 +286,7 @@ def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
             # bboxes[pos] is updated by reference
             if display:
                 frame = draw_p_frame(frame, flow[i], bboxes[pos],
-                                            interp=interp_kalman_clos)
+                                     interp=interp_kalman_clos)
             else:
                 interp_kalman_clos(bboxes[pos], flow[i], frame)
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
@@ -299,6 +302,9 @@ def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
     cap.release()
     if display:
         out.release()
+
+    sns.distplot(kalman.tmp)
+    plt.savefig(src_id+".pdf")
 
 def parse_opt():
     parser = argparse.ArgumentParser()

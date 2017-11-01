@@ -22,7 +22,8 @@ VIS_CMD = join("mpegflow", "vis")
 
 # refer to gpac/src/media_tools/av_parsers.c for profile and level
 # TODO: profile and level option for mpeg4 in ffmpeg won't be active.
-def dump_flow(movie, prefix=None, codec="h264"):
+# def dump_flow(movie, prefix=None, codec="h264"):
+def dump_flow(movie, prefix=None, codec="mpeg4"):
     if prefix is None:
         prefix = movie
 

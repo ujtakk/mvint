@@ -6,6 +6,10 @@ import argparse
 import cv2
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
 from tqdm import trange
 
 from flow import get_flow, draw_flow
@@ -24,46 +28,19 @@ def calc_center(bbox):
 # delegated class
 class KalmanInterpolator:
     def __init__(self, processNoise=1e-3, measurementNoise=1e-3):
-        # self.kalman = cv2.KalmanFilter(2, 2, 2)
-        # self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
-        # self.kalman.controlMatrix = np.float32(1.0 * np.eye(2))
-        # self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
-        # self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
-        # self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
-
-        self.dp, self.mp, self.cp = 4, 2, 2
-        self.kalman = cv2.KalmanFilter(self.dp, self.mp, self.cp)
-        self.kalman.transitionMatrix = (1.0 * np.asarray([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1],
-        ])).astype(np.float32)
-        self.kalman.controlMatrix = (1.0 * np.asarray([
-            [1, 0],
-            [0, 1],
-            [1, 0],
-            [0, 1],
-        ])).astype(np.float32)
-        self.kalman.measurementMatrix = (1.0 * np.asarray([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-        ])).astype(np.float32)
-        self.kalman.processNoiseCov = (processNoise * np.asarray([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 1, 0],
-            [0, 0, 0, 1],
-        ])).astype(np.float32)
-        self.kalman.measurementNoiseCov = (measurementNoise * np.asarray([
-            [1, 0],
-            [0, 1],
-        ])).astype(np.float32)
+        self.kalman = cv2.KalmanFilter(2, 2, 2)
+        self.kalman.transitionMatrix = np.float32(1.0 * np.eye(2))
+        self.kalman.controlMatrix = np.float32(1.0 * np.eye(2))
+        self.kalman.measurementMatrix = np.float32(1.0 * np.eye(2))
+        self.kalman.processNoiseCov = np.float32(processNoise * np.eye(2))
+        self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(2))
 
         self.total = 0
         self.count = 0
         self.stateList = []
         self.errorCovList = []
+
+        self.tmp = []
 
     def init(self, dp, mp, cp):
         self.kalman.init(dp, mp, cp)
@@ -77,12 +54,11 @@ class KalmanInterpolator:
         for bbox in bboxes.itertuples():
             self.total += 1
             self.stateList.append(
-                np.append(calc_center(bbox), (0, 0)).astype(np.float32))
+                calc_center(bbox).astype(np.float32))
 
         for i in range(self.total):
             self.errorCovList.append(
-                    (1.0 * np.eye(self.dp)).astype(np.float32))
-                    # (0.0 * np.eye(2)).astype(np.float32))
+                    (1.0 * np.eye(2)).astype(np.float32))
 
     def predict(self, control):
         self.kalman.statePost = self.stateList[self.count]
@@ -112,9 +88,20 @@ class KalmanInterpolator:
         else:
             self.count += 1
 
-        return state[0:2].flatten()
+        return state.flatten()
+
+def sigmoid(x, alpha=20.0, scale=1.0, offset=(0.2, 1.0)):
+# def sigmoid(x, alpha=10.0, scale=2.0, offset=(0.5, 1.0)):
+    return scale / (1 + np.exp(-alpha*(x-offset[0]))) + offset[1]
 
 def interp_kalman_unit(bbox, flow_mean, frame, kalman):
+    size_rate = ((bbox.right - bbox.left) * (bbox.bot-bbox.top)) \
+              / (frame.shape[0] * frame.shape[1])
+    size_rate = np.sqrt(size_rate)
+    kalman.tmp.append(size_rate)
+    # flow_mean *= sigmoid(size_rate)
+    flow_mean *= 1 + size_rate
+
     center = calc_center(bbox)
     new_center = kalman.filter(center, flow_mean)
     frame_mean = new_center - center
@@ -193,7 +180,7 @@ def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
         else:
             # bboxes[pos] is updated by reference
             frame = draw_p_frame(frame, flow[i], bboxes[pos],
-                                        interp=interp_kalman_clos)
+                                 interp=interp_kalman_clos)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -204,6 +191,8 @@ def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
 
     cap.release()
     out.release()
+    sns.distplot(kalman.tmp)
+    plt.savefig(os.path.basename(movie)+".pdf")
 
 def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
     if base and worst:
@@ -283,10 +272,10 @@ def main():
 
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    # vis_kalman(args.movie, header, flow, bboxes,
-    #            base=args.base, worst=args.worst)
-    vis_composed(args.movie, header, flow, bboxes,
-                 base=args.base, worst=args.worst)
+    vis_kalman(args.movie, header, flow, bboxes,
+               base=args.base, worst=args.worst)
+    # vis_composed(args.movie, header, flow, bboxes,
+    #              base=args.base, worst=args.worst)
 
 if __name__ == "__main__":
     main()

@@ -30,6 +30,7 @@ from flow import get_flow, draw_flow
 from annotate import pick_bbox, draw_bboxes
 from interp import interp_linear
 from interp import draw_i_frame, draw_p_frame
+from kalman import KalmanInterpolator, interp_kalman
 from vis import open_video
 from mapping import SimpleMapper
 from bbox_ssd import predict, setup_model
@@ -68,10 +69,7 @@ class MOT16:
         if do_mapping:
             self.mapper.set(bboxes, self.prev_bboxes)
 
-        names = []
         for bbox_id, bbox_body in self.mapper.get(bboxes):
-            names.append(str(bbox_id))
-
             left = bbox_body.left
             top = bbox_body.top
             width = bbox_body.right - bbox_body.left
@@ -79,23 +77,29 @@ class MOT16:
 
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
-        bboxes["name"] = names
 
         self.prev_bboxes = bboxes
 
-def eval_mot16(src_id, prefix="MOT16/train",
-               thresh=0.0, baseline=False, worst=False):
+def eval_mot16(src_id, prefix="MOT16/train", thresh=0.0,
+               baseline=False, worst=False, display=False):
     mot = MOT16(src_id)
     bboxes = mot.pick_bboxes()
 
     movie = join(prefix, src_id)
     flow, header = get_flow(movie, prefix=".")
 
-    cap, out = open_video(movie)
+    if display:
+        cap, out = open_video(movie, use_out=True)
+    else:
+        cap = open_video(movie, use_out=False)
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
+    interp_kalman_clos = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman)
 
     for index, bbox in enumerate(bboxes):
         if not bbox.empty:
@@ -109,30 +113,40 @@ def eval_mot16(src_id, prefix="MOT16/train",
 
         if baseline:
             pos = i
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
+            kalman.reset(bboxes[pos])
         elif header["pict_type"][i] == "I":
             pos = i
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
+            kalman.reset(bboxes[pos])
         elif worst:
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_i_frame(frame, flow[i], bboxes[pos],
+                                     interp=interp_kalman_clos)
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
-            # mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
         else:
             # bboxes[pos] is updated by reference
-            frame = draw_p_frame(frame, flow[i], bboxes[pos])
+            if display:
+                frame = draw_p_frame(frame, flow[i], bboxes[pos])
+            else:
+                interp_kalman_clos(bboxes[pos], flow[i], frame)
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
 
-        cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
-        cv2.putText(frame,
-                    f"pict_type: {header['pict_type'][i]}", (width-210, 50),
-                    cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
+        if display:
+            cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
+            cv2.putText(frame,
+                        f"pict_type: {header['pict_type'][i]}", (width-210, 50),
+                        cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
-        out.write(frame)
+            out.write(frame)
 
     cap.release()
-    out.release()
+    if display:
+        out.release()
 
 def eval_mot16_pred(args, prefix="MOT16/train",
                     thresh=0.0, baseline=False, worst=False):
