@@ -81,19 +81,25 @@ def div_median(inner_flow):
 
     return frame_mean.astype(np.float32)
 
+def divergence(field):
+    "return the divergence of a n-D field"
+    return np.sum(np.gradient(field), axis=0)
 
 def calc_flow_mean(inner_flow, filling_rate=1.0):
-    # if inner_flow.shape[0] < 2:
-    #     return np.zeros(2)
+    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+        return np.zeros(2)
 
     # ********************* Your MOT16 Results *********************
     # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
     # 54.6 64.4 47.4| 62.3  84.6  2.35|  517 110  300  107| 12484 41597   803  1502|  50.3  77.9  51.0
     # flow_mean = np.mean(inner_flow, axis=0)
-    # flow_mean = np.mean(inner_flow, axis=(0, 1))
-    flow_mean = div_median(inner_flow)
+    flow_mean = np.mean(inner_flow, axis=(0, 1))
+    # flow_mean = div_median(inner_flow)
     # TODO: divide each corner
-    flow_mean *= 1.0 / filling_rate
+    # flow_mean *= 1.0 / filling_rate
+    flow_mean *= 1 + 1 / np.var(inner_flow, axis=(0, 1))
+    # print(flow_mean.dtype, np.std(inner_flow, axis=(0, 1)).dtype)
+    # flow_mean *= 1.0 / np.mean(np.std(inner_flow, axis=(0, 1)))
 
     # dist = sklearn.mixture.GaussianMixture(n_components=2)
     # # dist = sklearn.mixture.BayesianGaussianMixture(n_components=2)
@@ -132,13 +138,46 @@ def calc_flow_mean(inner_flow, filling_rate=1.0):
     # index = np.argmax(np.linalg.norm(means, axis=1))
     # flow_mean = means[index, :] / weights[index]
 
-    return flow_mean
+    return np.nan_to_num(flow_mean)
 
 def interp_linear_unit(bbox, flow_mean, frame):
     left  = bbox.left + flow_mean[0]
     top   = bbox.top + flow_mean[1]
     right = bbox.right + flow_mean[0]
     bot   = bbox.bot + flow_mean[1]
+
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
+
+def test_interp(bbox, inner_flow, frame):
+    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+        left  = np.int(bbox.left)
+        top   = np.int(bbox.top)
+        right = np.int(bbox.right)
+        bot   = np.int(bbox.bot)
+        return pd.Series({"name": bbox.name, "prob": bbox.prob,
+            "left": left, "top": top, "right": right, "bot": bot})
+
+    center = np.asarray(inner_flow.shape) // 2
+    upper_left = np.mean(inner_flow[:center[0], :center[1]], axis=(0, 1))
+    upper_right = np.mean(inner_flow[:center[0], center[1]:], axis=(0, 1))
+    lower_left = np.mean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
+    lower_right = np.mean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
+
+    a = 1.5
+
+    left  = bbox.left + a* np.mean((upper_left, lower_left), axis=0)[1]
+    top   = bbox.top + a* np.mean((upper_left, upper_right), axis=0)[0]
+    right = bbox.right + a* np.mean((upper_right, lower_right), axis=0)[1]
+    bot   = bbox.bot + a* np.mean((lower_left, lower_right), axis=0)[0]
 
     height = frame.shape[0]
     width = frame.shape[1]
@@ -168,6 +207,7 @@ def interp_linear(bboxes, flow, frame):
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
         flow_mean = calc_flow_mean(inner_flow)
         bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
+        # bboxes.loc[bbox.Index] = test_interp(bbox, inner_flow, frame)
 
     return bboxes
 
