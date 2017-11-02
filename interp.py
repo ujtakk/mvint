@@ -160,10 +160,10 @@ def interp_divide_unit(bbox, inner_flow, frame):
 
     a = 1.0
 
-    left  = bbox.left + a* np.mean((upper_left, lower_left), axis=0)[1]
-    top   = bbox.top + a* np.mean((upper_left, upper_right), axis=0)[0]
-    right = bbox.right + a* np.mean((upper_right, lower_right), axis=0)[1]
-    bot   = bbox.bot + a* np.mean((lower_left, lower_right), axis=0)[0]
+    left  = bbox.left + a* np.mean((upper_left, lower_left), axis=0)[0]
+    top   = bbox.top + a* np.mean((upper_left, upper_right), axis=0)[1]
+    right = bbox.right + a* np.mean((upper_right, lower_right), axis=0)[0]
+    bot   = bbox.bot + a* np.mean((lower_left, lower_right), axis=0)[1]
 
     height = frame.shape[0]
     width = frame.shape[1]
@@ -191,10 +191,11 @@ def interp_linear(bboxes, flow, frame):
 
     for bbox in bboxes.itertuples():
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
-        flow_mean = calc_flow_mean(inner_flow)
-        bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
-        # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
+        # flow_mean = calc_flow_mean(inner_flow)
+        # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
+
+        bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
 
     return bboxes
 
