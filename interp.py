@@ -17,11 +17,6 @@ from draw import draw_none
 from vis import open_video
 
 def find_inner(flow, bbox, flow_index, frame_index):
-    # ymin, xmin
-    # ymin, xmax
-    # ymax, xmin
-    # ymax, xmax
-
     mask_y = (bbox.top <= frame_index[:, 0]) \
            * (frame_index[:, 0] < bbox.bot)
     mask_x = (bbox.left <= frame_index[:, 1]) \
@@ -31,92 +26,83 @@ def find_inner(flow, bbox, flow_index, frame_index):
     if np.sum(mask) == 0:
         return np.zeros((1, 1, 2)).astype(np.float32)
 
-    mask_shape = flow_index[mask, :][-1] - flow_index[mask, :][0] + 1
     inner_flow = flow[flow_index[mask, 0], flow_index[mask, 1], :]
+
+    mask_shape = flow_index[mask, :][-1] - flow_index[mask, :][0] + 1
     inner_flow = inner_flow.reshape((mask_shape[0], mask_shape[1], -1))
 
     # if np.sum(mask) < 2:
     #     return inner_flow.astype(np.float32)
     #
-    # # print(np.sum(mask), flow_index[mask, :][-1] - flow_index[mask, :][0] + 1)
     # mask_shape = flow_index[mask, :][-1] - flow_index[mask, :][0] + 1
-    # weight = np.prod(mask_shape/2.75) * sp.stats.norm.pdf(flow_index[mask, :], loc=flow_index[mask, :][0] + mask_shape/2, scale=mask_shape/8)
-    # # print(flow_index[mask, :])
-    # # print(weight)
-    # # print(mask_shape)
+    # weight = np.prod(mask_shape/2.75) \
+    #        * sp.stats.norm.pdf(flow_index[mask, :],
+    #                            loc=flow_index[mask, :][0] + mask_shape/2,
+    #                            scale=mask_shape/8)
     #
     # inner_flow *= weight
 
     return inner_flow.astype(np.float32)
 
-def div_median(inner_flow):
-    # print("inner_flow", inner_flow)
+def calc_flow_mean(inner_flow, filling_rate=1.0):
+    # if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+    #     return np.zeros(2)
+
+    # ********************* Your MOT16 Results *********************
+    # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
+    # 54.6 64.4 47.4| 62.3  84.6  2.35|  517 110  300  107| 12484 41597   803  1502|  50.3  77.9  51.0
+    flow_mean = np.mean(inner_flow, axis=(0, 1))
+    # TODO: divide each corner
+    flow_mean *= 1.0 / filling_rate
+
+    return flow_mean
+
+def median_mean(inner_flow):
     flow = inner_flow.reshape((-1, 2))
-    # print("flow", flow)
     flow_norm = np.linalg.norm(flow, axis=1)
-    # print("flow_norm", flow_norm)
     norm_index = np.argsort(flow_norm)
-    # print("norm_index", norm_index)
     lower_median = norm_index[norm_index.shape[0]//4*1]
-    # print("lower_median", flow[lower_median])
     upper_median = norm_index[norm_index.shape[0]//4*3]
-    # print("upper_median", flow[upper_median])
     flow_lut = inner_flow[inner_flow.shape[0]//2-1:inner_flow.shape[0]//2+2,
                           inner_flow.shape[1]//2-1:inner_flow.shape[1]//2+2,
                           :].reshape((-1, 2))
-    # print("flow_lut", flow_lut)
-    # lut_norm = np.linalg.norm(flow, axis=1)
-    # print("lut_norm", lut_norm)
     judges = np.linalg.norm(flow_lut-flow[lower_median], axis=1) \
            < np.linalg.norm(flow_lut-flow[upper_median], axis=1)
-    # print("judges", judges)
 
     if np.sum(judges) < 5:
         frame_mean = flow[upper_median, :]
     else:
         frame_mean = flow[lower_median, :]
-    # print("frame_mean", frame_mean)
-
-    # print()
 
     return frame_mean.astype(np.float32)
 
-def divergence(field):
-    "return the divergence of a n-D field"
-    return np.sum(np.gradient(field), axis=0)
+def calc_flow_mean_adhoc(inner_flow):
+    flow_mean = np.mean(inner_flow, axis=(0, 1))
+    # flow_mean = median_mean(inner_flow)
 
-def calc_flow_mean(inner_flow, filling_rate=1.0):
-    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
-        return np.zeros(2)
+    flow_mean *= 1 + np.nan_to_num(1.0 / np.nan_to_num(np.var(inner_flow, axis=(0, 1))))
+    # flow_mean *= np.nan_to_num(np.log2(np.std(inner_flow, axis=(0, 1))))
+    # flow_mean *= 1 + 1.0 / np.nanmean(np.std(inner_flow, axis=(0, 1)))
+
+    return np.nan_to_num(flow_mean)
+
+def calc_flow_mean_mixture(inner_flow):
+    dist = sklearn.mixture.GaussianMixture(n_components=2)
+    # dist = sklearn.mixture.BayesianGaussianMixture(n_components=2)
+    dist.fit(inner_flow)
+    weights = dist.weights_
+    means = dist.means_
+    index = np.argmax(weights)
 
     # ********************* Your MOT16 Results *********************
     # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
-    # 54.6 64.4 47.4| 62.3  84.6  2.35|  517 110  300  107| 12484 41597   803  1502|  50.3  77.9  51.0
-    # flow_mean = np.mean(inner_flow, axis=0)
-    flow_mean = np.mean(inner_flow, axis=(0, 1))
-    # flow_mean = div_median(inner_flow)
-    # TODO: divide each corner
-    # flow_mean *= 1.0 / filling_rate
-    flow_mean *= 1 + 1 / np.var(inner_flow, axis=(0, 1))
-    # print(flow_mean.dtype, np.std(inner_flow, axis=(0, 1)).dtype)
-    # flow_mean *= 1.0 / np.mean(np.std(inner_flow, axis=(0, 1)))
-
-    # dist = sklearn.mixture.GaussianMixture(n_components=2)
-    # # dist = sklearn.mixture.BayesianGaussianMixture(n_components=2)
-    # dist.fit(inner_flow)
-    # weights = dist.weights_
-    # means = dist.means_
-    # index = np.argmax(weights)
+    # 54.9 64.8 47.6| 62.7  85.2  2.25|  517 118  291  108| 11977 41209   779  1425|  51.1  78.1  51.8
+    flow_mean = means[index, :]
 
     # # ********************* Your MOT16 Results *********************
     # # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
     # # 53.0 62.5 46.0| 60.8  82.6  2.66|  517  85  315  117| 14159 43271   919  1773|  47.2  78.2  48.0
     # flow_mean = means[index, :] / weights[index]
-
-    # # ********************* Your MOT16 Results *********************
-    # # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
-    # # 54.9 64.8 47.6| 62.7  85.2  2.25|  517 118  291  108| 11977 41209   779  1425|  51.1  78.1  51.8
-    # flow_mean = means[index, :]
 
     # # ********************* Your MOT16 Results *********************
     # # IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
@@ -157,7 +143,7 @@ def interp_linear_unit(bbox, flow_mean, frame):
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
         "left": left, "top": top, "right": right, "bot": bot})
 
-def test_interp(bbox, inner_flow, frame):
+def interp_divide_unit(bbox, inner_flow, frame):
     if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
         left  = np.int(bbox.left)
         top   = np.int(bbox.top)
@@ -172,7 +158,7 @@ def test_interp(bbox, inner_flow, frame):
     lower_left = np.mean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
     lower_right = np.mean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
 
-    a = 1.5
+    a = 1.0
 
     left  = bbox.left + a* np.mean((upper_left, lower_left), axis=0)[1]
     top   = bbox.top + a* np.mean((upper_left, upper_right), axis=0)[0]
@@ -207,7 +193,8 @@ def interp_linear(bboxes, flow, frame):
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
         flow_mean = calc_flow_mean(inner_flow)
         bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
-        # bboxes.loc[bbox.Index] = test_interp(bbox, inner_flow, frame)
+
+        # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
 
     return bboxes
 

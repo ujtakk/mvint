@@ -236,7 +236,7 @@ class MOT16_SORT:
             det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
 
 def eval_mot16_sort(src_id, prefix="MOT16/train", thresh=0.0,
-                    baseline=False, worst=False, display=True):
+                    baseline=False, worst=False, display=False):
     mot = MOT16_SORT(src_id)
     bboxes = mot.pick_bboxes()
 

@@ -100,7 +100,7 @@ def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     size_rate = np.sqrt(size_rate)
     kalman.tmp.append(size_rate)
     # flow_mean *= sigmoid(size_rate)
-    flow_mean *= 1 + size_rate
+    # flow_mean *= 1 + np.nan_to_num(size_rate)
 
     center = calc_center(bbox)
     new_center = kalman.filter(center, flow_mean)
