@@ -29,7 +29,7 @@ def pick_bbox(dir_path):
 
     return pd.Series(A)
 
-def draw_bbox(frame, bbox, frame_mean=None, color=(0, 255, 0), caption=False):
+def draw_bbox(frame, bbox, frame_mean=None, color=(0, 255, 0), caption=True):
     cv2.rectangle(frame, (bbox.left, bbox.top), (bbox.right, bbox.bot),
                   color, 4)
 
@@ -38,7 +38,7 @@ def draw_bbox(frame, bbox, frame_mean=None, color=(0, 255, 0), caption=False):
                     (bbox.left, bbox.top-10),
                     cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
         if frame_mean is not None:
-            cv2.putText(frame, f"{frame_mean}",
+            cv2.putText(frame, f"{bbox.velo}",
                         (bbox.left, bbox.bot+20),
                         cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1)
 

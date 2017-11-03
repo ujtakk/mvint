@@ -17,6 +17,7 @@ from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
 from interp import draw_i_frame, draw_p_frame, find_inner, calc_flow_mean
+from interp import interp_linear_unit, interp_divide_unit
 
 def calc_center(bbox):
     center_y = np.mean((bbox.bot, bbox.top))
@@ -120,7 +121,9 @@ def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     bot   = np.clip(bot, 0, height-1).astype(np.int)
 
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot})
+        "left": left, "top": top, "right": right, "bot": bot
+        ,"velo": f"{flow_mean}"
+        })
 
 def interp_kalman(bboxes, flow, frame, kalman):
     frame_rows = frame.shape[0]
@@ -137,9 +140,12 @@ def interp_kalman(bboxes, flow, frame, kalman):
 
     for bbox in bboxes.itertuples():
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
+
         flow_mean = calc_flow_mean(inner_flow)
         bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
                                                     kalman)
+
+        # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
 
     return bboxes
 
