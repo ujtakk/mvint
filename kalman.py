@@ -6,10 +6,6 @@ import argparse
 import cv2
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 from tqdm import trange
 
 from flow import get_flow, draw_flow
@@ -40,8 +36,6 @@ class KalmanInterpolator:
         self.count = 0
         self.stateList = []
         self.errorCovList = []
-
-        self.tmp = []
 
     def init(self, dp, mp, cp):
         self.kalman.init(dp, mp, cp)
@@ -99,7 +93,6 @@ def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     size_rate = ((bbox.right - bbox.left) * (bbox.bot-bbox.top)) \
               / (frame.shape[0] * frame.shape[1])
     size_rate = np.sqrt(size_rate)
-    kalman.tmp.append(size_rate)
     # flow_mean *= sigmoid(size_rate)
     # flow_mean *= 1 + np.nan_to_num(size_rate)
 
@@ -197,8 +190,6 @@ def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
 
     cap.release()
     out.release()
-    sns.distplot(kalman.tmp)
-    plt.savefig(os.path.basename(movie)+".pdf")
 
 def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
     if base and worst:

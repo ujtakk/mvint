@@ -80,7 +80,7 @@ class MOT16:
 
         self.prev_bboxes = bboxes
 
-def eval_mot16(src_id, prefix="MOT16/train", thresh=0.0,
+def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16, thresh=0.0,
                baseline=False, worst=False, display=False):
     mot = MOT16(src_id)
     bboxes = mot.pick_bboxes()
@@ -103,7 +103,7 @@ def eval_mot16(src_id, prefix="MOT16/train", thresh=0.0,
 
     for index, bbox in enumerate(bboxes):
         if not bbox.empty:
-            bboxes[index] = bbox.query(f"prob > {thresh}")
+            bboxes[index] = bbox.query(f"prob >= {thresh}")
 
     pos = 0
     for i in trange(count):
@@ -125,8 +125,7 @@ def eval_mot16(src_id, prefix="MOT16/train", thresh=0.0,
             kalman.reset(bboxes[pos])
         elif worst:
             if display:
-                frame = draw_i_frame(frame, flow[i], bboxes[pos],
-                                     interp=interp_kalman_clos)
+                frame = draw_i_frame(frame, flow[i], bboxes[pos])
             mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
         else:
             # bboxes[pos] is updated by reference
