@@ -348,6 +348,8 @@ def parse_opt():
                         action="store_true", default=False)
     parser.add_argument("--worst",
                         action="store_true", default=False)
+    parser.add_argument("--display",
+                        action="store_true", default=False)
     return parser.parse_args()
 
 def main():
@@ -356,7 +358,8 @@ def main():
                MOT16=MOT16_SORT,
                thresh=args.thresh,
                baseline=args.baseline,
-               worst=args.worst)
+               worst=args.worst,
+               display=args.display)
 
 if __name__ == "__main__":
     main()
