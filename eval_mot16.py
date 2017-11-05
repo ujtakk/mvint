@@ -19,6 +19,7 @@ import os
 from os.path import join, exists
 import argparse
 from collections import defaultdict
+import time
 
 import cv2
 import numpy as np
@@ -58,8 +59,7 @@ class MOT16:
             right = (det_entry["left"] + det_entry["width"]).astype(np.int)
             bot = (det_entry["top"] + det_entry["height"]).astype(np.int)
             bboxes[frame-1] = pd.DataFrame({
-                "name": "",
-                "prob": det_entry["score"],
+                "name": "", "prob": det_entry["score"],
                 "left": left, "top": top, "right": right, "bot": bot
             })
 
@@ -67,7 +67,7 @@ class MOT16:
 
     def eval_frame(self, fnum, bboxes, do_mapping=False):
         if do_mapping:
-            self.mapper.set(bboxes, self.prev_bboxes)
+            self.mapper.set(bboxes)
 
         for bbox_id, bbox_body in self.mapper.get(bboxes):
             left = bbox_body.left
@@ -78,10 +78,8 @@ class MOT16:
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
                   file=self.dst_fd)
 
-        self.prev_bboxes = bboxes
-
-def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16, thresh=0.0,
-               baseline=False, worst=False, display=False):
+def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
+               thresh=0.0, baseline=False, worst=False, display=False):
     mot = MOT16(src_id)
     bboxes = mot.pick_bboxes()
 
@@ -97,7 +95,7 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16, thresh=0.0,
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
+    kalman = KalmanInterpolator()
     interp_kalman_clos = lambda bboxes, flow, frame: \
             interp_kalman(bboxes, flow, frame, kalman)
 
@@ -105,35 +103,35 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16, thresh=0.0,
         if not bbox.empty:
             bboxes[index] = bbox.query(f"prob >= {thresh}")
 
-    pos = 0
-    for i in trange(count):
+    start = time.perf_counter()
+    for i in range(count):
         ret, frame = cap.read()
         if ret is False or i > bboxes.size:
             break
 
         if baseline:
-            pos = i
+            bbox = bboxes[i].copy()
             if display:
-                frame = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
-            kalman.reset(bboxes[pos])
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=True)
+            kalman.reset(bbox)
         elif header["pict_type"][i] == "I":
-            pos = i
+            bbox = bboxes[i].copy()
             if display:
-                frame = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i+1, bboxes[pos], do_mapping=True)
-            kalman.reset(bboxes[pos])
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=True)
+            kalman.reset(bbox)
         elif worst:
             if display:
-                frame = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=False)
         else:
-            # bboxes[pos] is updated by reference
+            # bbox is updated by reference
             if display:
-                frame = draw_p_frame(frame, flow[i], bboxes[pos])
+                frame = draw_p_frame(frame, flow[i], bbox)
             else:
-                interp_kalman_clos(bboxes[pos], flow[i], frame)
-            mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
+                interp_kalman_clos(bbox, flow[i], frame)
+            mot.eval_frame(i+1, bbox, do_mapping=False)
 
         if display:
             cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -142,15 +140,16 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16, thresh=0.0,
                         cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
 
             out.write(frame)
+    end = time.perf_counter()
+    print(f"{src_id}: {count/(end-start):3.1f} FPS")
 
     cap.release()
     if display:
         out.release()
 
-def eval_mot16_pred(args, prefix="MOT16/train",
-                    thresh=0.0, baseline=False, worst=False):
-    mot = MOT16(args.src_id)
-    model = setup_model(args)
+def eval_mot16_pred(src_id, model, prefix="MOT16/train", MOT16=MOT16,
+                    thresh=0.0, baseline=False, worst=False, display=False):
+    mot = MOT16(src_id)
 
     movie = join(prefix, args.src_id)
     flow, header = get_flow(movie, prefix=".")
@@ -161,27 +160,33 @@ def eval_mot16_pred(args, prefix="MOT16/train",
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    bboxes = pd.DataFrame()
+    bbox = pd.DataFrame()
     for i in trange(count):
         ret, frame = cap.read()
         if ret is False:
             break
 
         if baseline:
-            bboxes = predict(model, frame, thresh=thresh)
-            frame = draw_i_frame(frame, flow[i], bboxes)
-            mot.eval_frame(i+1, bboxes, do_mapping=True)
+            bbox = predict(model, frame, thresh=thresh)
+            if display:
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=True)
         elif header["pict_type"][i] == "I":
-            bboxes = predict(model, frame, thresh=thresh)
-            frame = draw_i_frame(frame, flow[i], bboxes)
-            mot.eval_frame(i+1, bboxes, do_mapping=True)
+            bbox = predict(model, frame, thresh=thresh)
+            if display:
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=True)
         elif worst:
-            frame = draw_i_frame(frame, flow[i], bboxes[pos])
-            mot.eval_frame(i+1, bboxes[pos], do_mapping=False)
+            if display:
+                frame = draw_i_frame(frame, flow[i], bbox)
+            mot.eval_frame(i+1, bbox, do_mapping=False)
         else:
-            # bboxes[pos] is updated by reference
-            frame = draw_p_frame(frame, flow[i], bboxes)
-            mot.eval_frame(i+1, bboxes, do_mapping=False)
+            # bbox is updated by reference
+            if display:
+                frame = draw_p_frame(frame, flow[i], bbox)
+            else:
+                interp_linear(bbox, flow[i], frame)
+            mot.eval_frame(i+1, bbox, do_mapping=False)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -200,24 +205,29 @@ def parse_opt():
                         action="store_true", default=False)
     parser.add_argument("--worst",
                         action="store_true", default=False)
-    parser.add_argument("--thresh", type=float, default=0.0)
+    parser.add_argument("--thresh", type=float, default=0.1)
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd512")
     parser.add_argument("--param",
                         default="/home/work/takau/6.image/mot/mot16_ssd512.h5")
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--pred",
+                        action="store_true", default=False)
     return parser.parse_args()
 
 def main():
     args = parse_opt()
-    eval_mot16(args.src_id,
-               thresh=args.thresh,
-               baseline=args.baseline,
-               worst=args.worst)
-    # eval_mot16_pred(args,
-    #                 thresh=args.thresh,
-    #                 baseline=args.baseline,
-    #                 worst=args.worst)
+    if pred:
+        eval_mot16_pred(args.src_id,
+                        setup_model(args.param, args.model, args.gpu),
+                        thresh=args.thresh,
+                        baseline=args.baseline,
+                        worst=args.worst)
+    else:
+        eval_mot16(args.src_id,
+                   thresh=args.thresh,
+                   baseline=args.baseline,
+                   worst=args.worst)
 
 if __name__ == "__main__":
     main()

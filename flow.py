@@ -124,12 +124,25 @@ def get_flow(movie, vis=False, occupancy=False, prefix=None):
 
     return flow, header
 
+def divergence(field):
+    grad_x = np.gradient(field[:, :, 0], axis=1)
+    grad_y = np.gradient(field[:, :, 1], axis=0)
+    div = grad_x + grad_y
+    return div
+
 def draw_flow(frame, flow):
     def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
                    line_color=(0, 0, 255), start_color=(0, 255, 0)):
         cv2.line(frame, start, end, line_color, 2)
         cv2.circle(frame, end, 1, (0, 255, 255), -1)
         cv2.circle(frame, start, 1, (255, 255, 0), -1)
+        return frame
+
+    def draw_grad(frame, point, val, alpha=0.3):
+        start = (point[0] - 6, point[1] - 6)
+        end = (point[0] + 6, point[1] + 6)
+        color = int(np.clip(127 + 8*val, 0, 255))
+        cv2.rectangle(frame, start, end, (color, 0, 0), -1)
         return frame
 
     frame_rows = frame.shape[0]
@@ -139,6 +152,8 @@ def draw_flow(frame, flow):
     rows = flow.shape[0]
     cols = flow.shape[1]
     assert(flow.shape[2] == 2)
+
+    div = divergence(flow)
 
     for i in range(rows):
         for j in range(cols):
@@ -152,6 +167,7 @@ def draw_flow(frame, flow):
             end = (start[0] + dx, start[1] + dy)
             end = tuple(map(int, end))
 
+            # frame = draw_grad(frame, start, div[i, j])
             frame = draw_arrow(frame, start, end)
 
     return frame

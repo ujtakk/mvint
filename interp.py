@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import argparse
 from multiprocessing import Pool
 
@@ -11,7 +12,7 @@ import cv2
 from tqdm import trange
 import sklearn.mixture
 
-from flow import get_flow, draw_flow
+from flow import get_flow, draw_flow, divergence
 from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
@@ -55,7 +56,21 @@ def calc_flow_mean(inner_flow, filling_rate=1.0):
     # TODO: divide each corner
     flow_mean *= 1.0 / filling_rate
 
-    return flow_mean
+    # try:
+    #     grad_x = np.gradient(inner_flow[:, :, 0], axis=1)
+    #     grad_y = np.gradient(inner_flow[:, :, 1], axis=0)
+    #     div_flow = np.stack((grad_x, grad_y), axis=-1)
+    #
+    #     # grad_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
+    #     # har_mean = sp.stats.hmean((np.linalg.norm(flow_mean),
+    #     #                            np.linalg.norm(grad_mean)))
+    #     # flow_mean *= np.linalg.norm(grad_mean) / np.linalg.norm(flow_mean)
+    #
+    #     flow_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
+    # except:
+    #     pass
+
+    return np.nan_to_num(flow_mean)
 
 def median_mean(inner_flow):
     flow = inner_flow.reshape((-1, 2))
@@ -161,19 +176,6 @@ def interp_divide_unit(bbox, inner_flow, frame):
     lower_right = a * np.mean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
 
     flow_mean = calc_flow_mean(inner_flow)
-    print(flow_mean  )
-    print(upper_left )
-    print(upper_right)
-    print(lower_left )
-    print(lower_right)
-    print()
-
-    # print(
-    # np.mean((upper_left, lower_left), axis=0)[0],
-    # np.mean((upper_left, upper_right), axis=0)[1],
-    # np.mean((upper_right, lower_right), axis=0)[0],
-    # np.mean((lower_left, lower_right), axis=0)[1],
-    # )
 
     left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
     top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]

@@ -7,10 +7,9 @@ import cv2
 import numpy as np
 import pandas as pd
 from tqdm import trange
-from sklearn.utils.linear_assignment_ import linear_assignment
 
 from mapping import Mapper, SimpleMapper
-from eval_mot16 import eval_mot16
+from eval_mot16 import MOT16, eval_mot16
 
 from deep_sort.application_util import preprocessing
 from deep_sort.application_util import visualization
@@ -24,13 +23,16 @@ from deep_sort.deep_sort.track import Track
 from deep_sort.deep_sort_app import create_detections
 
 from sort.sort import associate_detections_to_trackers
-from sort.sort import convert_bbox_to_z, convert_x_to_bbox
+from sort.sort import convert_bbox_to_z
+from sort.sort import KalmanBoxTracker
 
 # Custom Tracker
 class DeepSORTMapper(Mapper):
+# {{{
     def __init__(self, max_iou_distance=0.7, max_age=30, n_init=3,
                  max_cosine_distance=0.2, nn_budget=100):
-                 # max_cosine_distance=0.0, nn_budget=100):
+    # def __init__(self, max_iou_distance=1.0, max_age=30, n_init=3,
+    #              max_cosine_distance=-100., nn_budget=100):
 
         self.metric = NearestNeighborDistanceMetric(
             "cosine", max_cosine_distance, nn_budget)
@@ -41,33 +43,36 @@ class DeepSORTMapper(Mapper):
         self.kf = kalman_filter.KalmanFilter()
         self.tracks = []
         self._next_id = 1
-        self.ids = dict()
+
+        self.detections = []
+        self.id_map = dict()
 
     def predict(self):
         for track in self.tracks:
             track.predict(self.kf)
 
-    def update(self, detections):
-        # Run matching cascade.
-        matches, unmatched_tracks, unmatched_detections = \
-            self._match(detections)
+    def update(self, dets, matches, unmatched_tracks, unmatched_detections):
+        id_map = dict()
 
         # Update track set.
-        id_map = dict()
         for track_idx, detection_idx in matches:
-            self.tracks[track_idx].update(self.kf, detections[detection_idx])
+            self.tracks[track_idx].update(self.kf, dets[detection_idx])
             id_map[self.tracks[track_idx].track_id] = detection_idx
+
         for track_idx in unmatched_tracks:
             self.tracks[track_idx].mark_missed()
-            if self.tracks[track_idx].is_confirmed() \
-            and self.tracks[track_idx].time_since_update < 1:
+            if self.tracks[track_idx].is_confirmed() and \
+               self.tracks[track_idx].time_since_update < 1:
                 id_map[self.tracks[track_idx].track_id] = \
-                    self.ids[self.tracks[track_idx].track_id]
+                    self.id_map[self.tracks[track_idx].track_id]
+
         for detection_idx in unmatched_detections:
+            self._initiate_track(dets[detection_idx])
             id_map[self._next_id] = detection_idx
-            self._initiate_track(detections[detection_idx])
+
+        self.id_map = id_map
+
         self.tracks = [t for t in self.tracks if not t.is_deleted()]
-        self.ids = id_map
 
         # Update distance metric.
         active_targets = [t.track_id for t in self.tracks if t.is_confirmed()]
@@ -75,16 +80,18 @@ class DeepSORTMapper(Mapper):
         for track in self.tracks:
             if not track.is_confirmed():
                 continue
+
             features += track.features
             targets += [track.track_id for _ in track.features]
             track.features = []
+
         self.metric.partial_fit(
             np.asarray(features), np.asarray(targets), active_targets)
 
     def _match(self, detections):
-
         def gated_metric(tracks, detections, track_indices, detection_indices):
-            features = np.array([detections[i].feature for i in detection_indices])
+            features = np.array([detections[i].feature
+                                 for i in detection_indices])
             targets = np.array([tracks[i].track_id for i in track_indices])
             cost_matrix = self.metric.distance(features, targets)
             cost_matrix = linear_assignment.gate_cost_matrix(
@@ -119,6 +126,7 @@ class DeepSORTMapper(Mapper):
 
         matches = matches_a + matches_b
         unmatched_tracks = list(set(unmatched_tracks_a + unmatched_tracks_b))
+
         return matches, unmatched_tracks, unmatched_detections
 
     def _initiate_track(self, detection):
@@ -128,104 +136,78 @@ class DeepSORTMapper(Mapper):
             detection.feature))
         self._next_id += 1
 
-    def set(self, next_detections, prev_detections, use_prev=False):
-        if use_prev:
-            self.predict()
-            self.update(prev_detections)
-        else:
-            self.predict()
-            self.update(next_detections)
+    def set_detections(self, source, fnum, min_confidence=0.4, min_height=0.0):
+        detections = create_detections(source, fnum, min_height)
+        detections = [d for d in detections
+                      if d.confidence >= min_confidence]
+
+        nms_max_overlap = 1.0
+        boxes = np.array([d.tlwh for d in detections])
+        scores = np.array([d.confidence for d in detections])
+        self.indices = preprocessing.non_max_suppression(
+            boxes, nms_max_overlap, scores)
+        detections = [detections[i] for i in self.indices]
+
+        self.detections = detections
+
+    def set(self, bboxes):
+        self.update_detections(bboxes)
+
+        self.predict()
+
+        # Run matching cascade.
+        matches, unmatched_tracks, unmatched_detections = \
+            self._match(self.detections)
+
+        self.update(self.detections,
+                    matches, unmatched_tracks, unmatched_detections)
 
     def get(self, bboxes):
         for track in self.tracks:
             if not track.is_confirmed() or track.time_since_update >= 1:
                 continue
 
-            bbox_idx = self.ids[track.track_id]
-            yield track.track_id, bboxes.loc[bbox_idx]
+            idx = self.id_map[track.track_id]
+            s = track.to_tlbr()
+            bbox = pd.Series({
+                "name": bboxes["name"][idx], "prob": bboxes["prob"][idx],
+                "left": s[0], "top": s[1], "right": s[2], "bot": s[3]
+            })
+            # bboxes.loc[idx] = bbox
 
-class BBoxKalmanFilter:
-    count = 0
+            yield track.track_id, bbox
+            # yield track.track_id, bboxes.loc[idx]
 
-    def __init__(self, bbox):
-        self.kalman = cv2.KalmanFilter(7, 4, 0)
-        self.kalman.transitionMatrix = np.asarray([
-            [1, 0, 0, 0, 1, 0, 0],
-            [0, 1, 0, 0, 0, 1, 0],
-            [0, 0, 1, 0, 0, 0, 1],
-            [0, 0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 0, 1, 0],
-            [0, 0, 0, 0, 0, 0, 1]
-        ]).astype(np.float32)
-        self.kalman.controlMatrix = 0
-        self.kalman.measurementMatrix = np.asarray([
-            [1, 0, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0, 0],
-            [0, 0, 0, 1, 0, 0, 0]
-        ]).astype(np.float32)
-        self.kalman.processNoiseCov = np.eye(7)
-        self.kalman.processNoiseCov[-1, -1] *= 0.01
-        self.kalman.processNoiseCov[4:, 4:] *= 0.01
-        self.kalman.measurementNoiseCov = np.eye(4)
-        self.kalman.measurementNoiseCov[2:, 2:] *= 10.
+    def update_detections(self, bboxes):
+        assert len(self.detections) == len(bboxes)
 
-        self.kalman.state[:4] = convert_bbox_to_z(bbox)
-        self.time_since_update = 0
-        self.id = BBoxKalmanFilter.count
-        BBoxKalmanFilter.count += 1
-        self.history = []
-        self.hits = 0
-        self.hit_streak = 0
-        self.age = 0
-
-    def init(self, dp, mp, cp):
-        self.kalman.init(dp, mp, cp)
-
-    def predict(self, control):
-        if self.kalman.state[6] + self.kalman.state[2] <= 0:
-            self.kalman.state[6] *= 0.0
-
-        result = self.kalman.predict(control)
-        self.history.append(convert_x_to_bbox(result))
-
-        self.age += 1
-        if self.time_since_update > 0:
-            self.hit_streak = 0
-        self.time_since_update += 1
-
-        return self.history[-1]
-
-    def correct(self, measurement):
-        self.time_since_update = 0
-        self.history = []
-        self.hits += 1
-        self.hit_streak += 1
-
-        self.kalman.correct(convert_bbox_to_z(measurement))
-
-    def get_state(self):
-        return convert_x_to_bbox(self.kalman.state)
-
+        for bbox, det in zip(bboxes.itertuples(), self.detections):
+            left = bbox.left
+            top = bbox.top
+            width = bbox.right - bbox.left
+            height = bbox.bot - bbox.top
+            det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
+# }}}
 
 class SORTMapper(Mapper):
-    def __init__(self):
+# {{{
+    def __init__(self, max_age=1, min_hits=3):
         self.max_age = max_age
         self.min_hits = min_hits
         self.trackers = []
         self.frame_count = 0
+        self.id_map = dict()
 
     def predict(self):
         # get predicted locations from existing trackers.
-        # TODO: update track structure
         tracks = np.zeros((len(self.trackers), 5))
+
         to_del = []
         for t, track in enumerate(tracks):
             bbox = self.trackers[t].predict()[0]
             track[:] = [bbox[0], bbox[1], bbox[2], bbox[3], 0]
 
-            if np.any(np.isnan(pos)):
+            if np.any(np.isnan(bbox)):
                 to_del.append(t)
 
         tracks = np.ma.compress_rows(np.ma.masked_invalid(tracks))
@@ -237,46 +219,27 @@ class SORTMapper(Mapper):
 
     def update(self, dets, matched, unmatched_detections, unmatched_tracks):
         id_map = dict()
-
         # update matched trackers with assigned detections
         for t, track in enumerate(self.trackers):
             if t not in unmatched_tracks:
                 matched_mask = np.where(matched[:, 1] == t)
                 d = matched[matched_mask[0], 0]
-                track.correct(dets[d, :][0])
-                id_map[d] = track.count
+                track.update(dets[d, :][0])
+                assert d.size == 1
+                id_map[track.id] = d[0]
 
         # create and initialise new trackers for unmatched detections
         for i in unmatched_detections:
-            track = BBoxKalmanFilter(dets[i, :])
-            id_map[i] = track.count
+            track = KalmanBoxTracker(dets[i,:])
             self.trackers.append(track)
+            id_map[track.id] = i
 
-        i = len(self.trackers)
-        ret = []
-        for track in reversed(self.trackers):
-            d = track.get_state()[0]
-
-            if track.time_since_update < 1 and \
-              (track.hit_streak >= self.min_hits or \
-               self.frame_count <= self.min_hits):
-                # +1 as MOT benchmark requires positive
-                ret.append(np.concatenate((d, [track.id+1])).reshape(1, -1))
-
-            i -= 1
-
-            # remove dead tracklet
-            if track.time_since_update > self.max_age:
-                self.trackers.pop(i)
-
-        self.ids = id_map
-
-        return ret
+        self.id_map = id_map
 
     def convert(self, bboxes):
         detections = []
         for bbox in bboxes.itertuples():
-            np_bbox = np.zeros((4,))
+            np_bbox = np.zeros((5,))
 
             np_bbox[0] = bbox.left
             np_bbox[1] = bbox.top
@@ -285,29 +248,49 @@ class SORTMapper(Mapper):
 
             detections.append(np_bbox)
 
-        return detections
+        return np.asarray(detections)
 
-    def set(self, next_bboxes, prev_bboxes):
+    def set(self, bboxes):
         self.frame_count += 1
 
-        detections = self.convert(next_bboxes)
+        detections = self.convert(bboxes)
         tracks = self.predict()
 
         matched, unmatched_detections, unmatched_tracks = \
                 associate_detections_to_trackers(detections, tracks)
 
-        ret = self.update(matched, unmatched_detections, unmatched_tracks)
+        self.update(detections, matched, unmatched_detections, unmatched_tracks)
 
-        if len(ret) > 0:
-            return np.concatenate(ret)
-
-        return np.empty((0, 5))
-
+    # bboxes: mut pd.DataFrame
     def get(self, bboxes):
-        for bbox in bboxes.itertuples():
-            yield self.ids[bbox.Index], bbox
+        i = len(self.trackers)
+        for track in reversed(self.trackers):
+            s = track.get_state()[0]
+            s = s.astype(np.int)
+
+            if track.time_since_update < 1 and \
+              (track.hit_streak >= self.min_hits or \
+               self.frame_count <= self.min_hits):
+                idx = self.id_map[track.id]
+                bbox = pd.Series({
+                    "name": bboxes["name"][idx], "prob": bboxes["prob"][idx],
+                    "left": s[0], "top": s[1], "right": s[2], "bot": s[3]
+                })
+                # bboxes.loc[idx] = bbox
+
+                # +1 as MOT benchmark requires positive
+                yield track.id+1, bbox
+                # yield track.id+1, bboxes.loc[idx]
+
+            i -= 1
+
+            # remove dead tracklet
+            if track.time_since_update > self.max_age:
+                self.trackers.pop(i)
+# }}}
 
 class MOT16_SORT(MOT16):
+# {{{
     SORT_PREFIX = \
         "deep_sort/deep_sort_data/resources/detections/MOT16_POI_train"
 
@@ -315,39 +298,37 @@ class MOT16_SORT(MOT16):
         if not exists(dst_dir):
             os.makedirs(dst_dir)
 
-        self.src_path = join(src_dir, src_id)
-        self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
+        self.source = np.load(join(src_dir, src_id) + ".npy")
+        self.target = open(join(dst_dir, f"{src_id}.txt"), "w")
 
-        detection_file = self.src_path + ".npy"
-        self.source = np.load(detection_file)
-
-        self.min_height = 0
-        self.prev_bboxes = pd.DataFrame()
-        # self.mapper = SimpleMapper()
-        self.mapper = SORTMapper()
-        # self.prev_detections = []
+        self.min_height = 0.0
+        self.mapper = SimpleMapper()
+        # self.mapper = SORTMapper()
         # self.mapper = DeepSORTMapper()
 
-    def eval_frame(self, fnum, bboxes, do_mapping=False):
-        # if do_mapping:
-        #     min_confidence = 0.3
-        #     detections = create_detections(self.source, fnum, self.min_height)
-        #     detections = [d for d in detections
-        #                   if d.confidence >= min_confidence]
-        #     # nms_max_overlap = 1.0
-        #     # boxes = np.array([d.tlwh for d in detections])
-        #     # scores = np.array([d.confidence for d in detections])
-        #     # self.indices = preprocessing.non_max_suppression(
-        #     #     boxes, nms_max_overlap, scores)
-        #     # detections = [detections[i] for i in self.indices]
-        #     assert len(detections) == len(bboxes)
-        #     self.mapper.set(detections, self.prev_detections)
-        #     self.prev_detections = detections
-        # else:
-        #     self.mapper.set(None, self.prev_detections, use_prev=True)
+    def pick_bboxes(self):
+        det_frames = np.unique(self.source[:, 0].astype(np.int))
+        bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
 
-        if do_mapping:
-            self.mapper.set(bboxes, self.prev_bboxes)
+        for frame in det_frames:
+            detections = create_detections(self.source, frame, self.min_height)
+            bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
+            score = np.asarray([d.confidence for d in detections])
+
+            bboxes[frame-1] = pd.DataFrame({
+                "name": "", "prob": score,
+                "left": bbox[:, 0], "top": bbox[:, 1],
+                "right": bbox[:, 2], "bot": bbox[:, 3]
+            })
+
+        return pd.Series(bboxes)
+
+    def eval_frame(self, fnum, bboxes, do_mapping=False):
+        # if isinstance(self.mapper, DeepSORTMapper) and do_mapping:
+        if isinstance(self.mapper, DeepSORTMapper):
+            self.mapper.set_detections(self.source, fnum)
+
+        self.mapper.set(bboxes)
 
         for bbox_id, bbox_body in self.mapper.get(bboxes):
             left = bbox_body.left
@@ -356,36 +337,8 @@ class MOT16_SORT(MOT16):
             height = bbox_body.bot - bbox_body.top
 
             print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
-                  file=self.dst_fd)
-
-        # self._update_detections(bboxes)
-        self.prev_bboxes = bboxes
-
-    def pick_bboxes(self):
-        det_frames = np.unique(self.source[:, 0].astype(np.int))
-
-        bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
-        for frame in det_frames:
-            detections = create_detections(self.source, frame, self.min_height)
-            bbox = np.asarray([d.to_tlbr() for d in detections]).astype(np.int)
-            score = np.asarray([d.confidence for d in detections])
-
-            bboxes[frame-1] = pd.DataFrame({
-                "name": "",
-                "prob": score,
-                "left": bbox[:, 0], "top": bbox[:, 1],
-                "right": bbox[:, 2], "bot": bbox[:, 3]
-            })
-
-        return pd.Series(bboxes)
-
-    def _update_detections(self, bboxes):
-        for bbox, det in zip(bboxes.itertuples(), self.prev_detections):
-            left = bbox.left
-            top = bbox.top
-            width = bbox.right - bbox.left
-            height = bbox.bot - bbox.top
-            det.tlwh = np.asarray((left, top, width, height), dtype=np.float)
+                  file=self.target)
+# }}}
 
 def parse_opt():
     parser = argparse.ArgumentParser()

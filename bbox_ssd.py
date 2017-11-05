@@ -13,22 +13,22 @@ from chainercv.links import SSD300, SSD512
 
 from mot16 import MOT16Dataset, MOT16Transform
 
-def setup_model(args):
-    if args.model == 'ssd300':
+def setup_model(param, model_type="ssd512", gpu=-1):
+    if model_type == 'ssd300':
         model = SSD300(
             n_fg_class=len(MOT16Dataset.class_map),
             pretrained_model='imagenet')
-    elif args.model == 'ssd512':
+    elif model_type == 'ssd512':
         model = SSD512(
             n_fg_class=len(MOT16Dataset.class_map),
             pretrained_model='imagenet')
 
     model.use_preset('evaluate')
-    if args.gpu >= 0:
-        chainer.cuda.get_device_from_id(args.gpu).use()
+    if gpu >= 0:
+        chainer.cuda.get_device_from_id(gpu).use()
         model.to_gpu()
 
-    serializers.load_hdf5(args.param, model)
+    serializers.load_hdf5(param, model)
 
     return model
 
@@ -81,7 +81,7 @@ def parse_opt():
 def main():
     args = parse_opt()
 
-    model = setup_model(args)
+    model = setup_model(args.param, args.model, args.gpu)
 
     img = cv2.imread(args.image, cv2.IMREAD_COLOR)
     bboxes = predict(model, img)

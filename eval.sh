@@ -13,11 +13,15 @@ MOT16-13
 # find MOT16/ -name "*.avi" | xargs rm
 # rm -rf mpegflow_dump
 
-# echo $MOT_TRAIN | xargs -P 8 -n 1 -t python eval_mot16.py --thresh 0.1 --baseline
-# echo $MOT_TRAIN | xargs -P 8 -n 1 -t python eval_mot16.py --thresh 0.1 --worst
-# echo $MOT_TRAIN | xargs -P 8 -n 1 -t python eval_mot16.py --thresh 0.1
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python eval_mot16.py --baseline
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python eval_mot16.py --worst
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python eval_mot16.py
 
-# echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.4 --baseline
-echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.4 --worst
-# echo $MOT_TRAIN | xargs -P 8 -n 1 -t python sort.py --thresh 0.4
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --baseline
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --worst
+echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py
+
+# for mot in $MOT_TRAIN; do
+#   python sort.py $mot
+# done
 

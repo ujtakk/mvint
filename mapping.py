@@ -85,7 +85,7 @@ class Mapper:
     def __init__(self):
         pass
 
-    def set(self, next_bboxes, prev_bboxes):
+    def set(self, bboxes):
         pass
 
     def get(self, bbox):
@@ -96,36 +96,36 @@ class SimpleMapper(Mapper):
         self.affinity = affinity
         self.cost_thresh = cost_thresh
         self.id_count = 1
-        self.ids = dict()
+        self.id_map = dict()
+        self.prev_bboxes = pd.DataFrame()
 
     def _assign_id(self):
         new_id = self.id_count
         self.id_count += 1
         return new_id
 
-    def set(self, next_bboxes, prev_bboxes):
-        cost = calc_cost(prev_bboxes, next_bboxes, self.affinity)
+    def set(self, bboxes):
+        cost = calc_cost(self.prev_bboxes, bboxes, self.affinity)
         row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
 
         id_map = dict()
-        for bbox in next_bboxes.itertuples():
-            # id_map[bbox.Index] = self._assign_id()
+        for bbox in bboxes.itertuples():
             if bbox.Index in col_idx:
                 arg_idx = np.where(col_idx == bbox.Index)[0][0]
                 trans_cost = cost[row_idx, col_idx][arg_idx]
                 if trans_cost <= self.cost_thresh:
-                    id_map[bbox.Index] = self.ids[row_idx[arg_idx]]
+                    id_map[bbox.Index] = self.id_map[row_idx[arg_idx]]
                 else:
                     id_map[bbox.Index] = self._assign_id()
             else:
                 id_map[bbox.Index] = self._assign_id()
 
-        # self.ids = id_map
-        self.ids.update(id_map)
+        self.id_map = id_map
 
     def get(self, bboxes):
         for bbox in bboxes.itertuples():
-            yield self.ids[bbox.Index], bbox
+            yield self.id_map[bbox.Index], bbox
+        self.prev_bboxes = bboxes
 
 def parse_opt():
     parser = argparse.ArgumentParser()
