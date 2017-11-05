@@ -302,6 +302,8 @@ class MOT16_SORT(MOT16):
         self.target = open(join(dst_dir, f"{src_id}.txt"), "w")
 
         self.min_height = 0.0
+        self.frame_count = 1
+
         self.mapper = SimpleMapper()
         # self.mapper = SORTMapper()
         # self.mapper = DeepSORTMapper()
@@ -323,10 +325,9 @@ class MOT16_SORT(MOT16):
 
         return pd.Series(bboxes)
 
-    def eval_frame(self, fnum, bboxes, do_mapping=False):
-        # if isinstance(self.mapper, DeepSORTMapper) and do_mapping:
+    def eval_frame(self, bboxes):
         if isinstance(self.mapper, DeepSORTMapper):
-            self.mapper.set_detections(self.source, fnum)
+            self.mapper.set_detections(self.source, self.frame_count)
 
         self.mapper.set(bboxes)
 
@@ -336,8 +337,10 @@ class MOT16_SORT(MOT16):
             width = bbox_body.right - bbox_body.left
             height = bbox_body.bot - bbox_body.top
 
-            print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
+            print(f"{self.frame_count},{bbox_id},{left},{top},{width},{height}",
                   file=self.target)
+
+        self.frame_count += 1
 # }}}
 
 def parse_opt():

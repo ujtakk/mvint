@@ -42,19 +42,20 @@ class MOT16:
         if not exists(dst_dir):
             os.makedirs(dst_dir)
 
-        self.src_path = join(src_dir, src_id)
-        self.dst_fd = open(join(dst_dir, f"{src_id}.txt"), "w")
+        self.source = detinfo(join(src_dir, src_id))
+        self.target = open(join(dst_dir, f"{src_id}.txt"), "w")
+
+        self.frame_count = 1
 
         self.prev_bboxes = pd.DataFrame()
         self.mapper = SimpleMapper()
 
     def pick_bboxes(self):
-        det = detinfo(self.src_path)
-        det_frames = det["frame"].unique()
+        det_frames = self.source["frame"].unique()
         bboxes = [pd.DataFrame() for _ in np.arange(np.max(det_frames))]
 
         for frame in det_frames:
-            det_entry = det.query(f"frame == {frame}").reset_index()
+            det_entry = self.source.query(f"frame == {frame}").reset_index()
             left = (det_entry["left"]).astype(np.int)
             top = (det_entry["top"]).astype(np.int)
             right = (det_entry["left"] + det_entry["width"]).astype(np.int)
@@ -66,9 +67,8 @@ class MOT16:
 
         return pd.Series(bboxes)
 
-    def eval_frame(self, fnum, bboxes, do_mapping=False):
-        if do_mapping:
-            self.mapper.set(bboxes)
+    def eval_frame(self, bboxes):
+        self.mapper.set(bboxes)
 
         for bbox_id, bbox_body in self.mapper.get(bboxes):
             left = bbox_body.left
@@ -76,8 +76,10 @@ class MOT16:
             width = bbox_body.right - bbox_body.left
             height = bbox_body.bot - bbox_body.top
 
-            print(f"{fnum},{bbox_id},{left},{top},{width},{height},-1,-1,-1,-1",
-                  file=self.dst_fd)
+            print(f"{self.frame_count},{bbox_id},{left},{top},{width},{height}",
+                  file=self.target)
+
+        self.frame_count += 1
 # }}}
 
 def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
@@ -116,25 +118,26 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
             bbox = bboxes[i].copy()
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=True)
+            mot.eval_frame(bbox)
             kalman.reset(bbox)
         elif header["pict_type"][i] == "I":
             bbox = bboxes[i].copy()
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=True)
+            mot.eval_frame(bbox)
             kalman.reset(bbox)
         elif worst:
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=False)
+            mot.eval_frame(bbox)
         else:
             # bbox is updated by reference
             if display:
-                frame = draw_p_frame(frame, flow[i], bbox)
+                frame = draw_p_frame(frame, flow[i], bbox,
+                                     interp=interp_kalman_clos)
             else:
                 interp_kalman_clos(bbox, flow[i], frame)
-            mot.eval_frame(i+1, bbox, do_mapping=False)
+            mot.eval_frame(bbox)
 
         if display:
             cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -178,23 +181,23 @@ def eval_mot16_pred(src_id, model, prefix="MOT16/train", MOT16=MOT16,
             bbox = predict(model, frame, thresh=thresh)
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=True)
+            mot.eval_frame(bbox)
         elif header["pict_type"][i] == "I":
             bbox = predict(model, frame, thresh=thresh)
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=True)
+            mot.eval_frame(bbox)
         elif worst:
             if display:
                 frame = draw_i_frame(frame, flow[i], bbox)
-            mot.eval_frame(i+1, bbox, do_mapping=False)
+            mot.eval_frame(bbox)
         else:
             # bbox is updated by reference
             if display:
                 frame = draw_p_frame(frame, flow[i], bbox)
             else:
                 interp_linear(bbox, flow[i], frame)
-            mot.eval_frame(i+1, bbox, do_mapping=False)
+            mot.eval_frame(bbox)
 
         if display:
             cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
@@ -232,7 +235,7 @@ def parse_opt():
 
 def main():
     args = parse_opt()
-    if pred:
+    if args.pred:
         eval_mot16_pred(args.src_id,
                         setup_model(args.param, args.model, args.gpu),
                         thresh=args.thresh,
