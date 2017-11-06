@@ -127,7 +127,7 @@ class SimpleMapper(Mapper):
             yield self.id_map[bbox.Index], bbox
         self.prev_bboxes = bboxes
 
-import filterpy
+import filterpy.kalman
 class KalmanMapper(Mapper):
     def __init__(self, affinity=iou_cost, cost_thresh=1.0):
         self.affinity = affinity

@@ -40,7 +40,7 @@ def invert(bbox):
     right = left + width
     return pd.Series({"left": left, "top": top, "right": right, "bot": bot})
 
-import filterpy
+import filterpy.kalman
 # delegated class
 class KalmanInterpolator:
     def __init__(self, dp=2, mp=2, cp=2, processNoise=1e-0, measurementNoise=1e-1):
@@ -202,7 +202,8 @@ def interp_kalman(bboxes, flow, frame, kalman):
         # bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
         #                                             kalman)
 
-        flow_mean = calc_flow_mean_kalman(inner_flow, bbox.kalman)
+        # flow_mean = calc_flow_mean_kalman(inner_flow, bbox.kalman)
+        flow_mean = calc_flow_mean_kalman(inner_flow, None)
         bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
                                                     kalman)
         # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
@@ -275,7 +276,7 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    kalman = KalmanInterpolator(processNoise=1e-0, measurementNoise=1e-1)
+    kalman = KalmanInterpolator()
     interp_kalman_clos = lambda bboxes, flow, frame: \
             interp_kalman(bboxes, flow, frame, kalman)
 
@@ -338,10 +339,10 @@ def main():
 
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    vis_kalman(args.movie, header, flow, bboxes,
-               base=args.base, worst=args.worst)
-    # vis_composed(args.movie, header, flow, bboxes,
-    #              base=args.base, worst=args.worst)
+    # vis_kalman(args.movie, header, flow, bboxes,
+    #            base=args.base, worst=args.worst)
+    vis_composed(args.movie, header, flow, bboxes,
+                 base=args.base, worst=args.worst)
 
 if __name__ == "__main__":
     main()
