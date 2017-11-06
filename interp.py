@@ -196,15 +196,11 @@ def interp_divide_unit(bbox, inner_flow, frame):
         return pd.Series({"name": bbox.name, "prob": bbox.prob,
             "left": left, "top": top, "right": right, "bot": bot})
 
-    a = 1.0
-
     center = np.asarray(inner_flow.shape) // 2
-    upper_left = a * np.mean(inner_flow[:center[0], :center[1]], axis=(0, 1))
-    upper_right = a * np.mean(inner_flow[:center[0], center[1]:], axis=(0, 1))
-    lower_left = a * np.mean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
-    lower_right = a * np.mean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
-
-    flow_mean = calc_flow_mean(inner_flow)
+    upper_left = np.mean(inner_flow[:center[0], :center[1]], axis=(0, 1))
+    upper_right = np.mean(inner_flow[:center[0], center[1]:], axis=(0, 1))
+    lower_left = np.mean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
+    lower_right = np.mean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
 
     left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
     top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
@@ -220,9 +216,7 @@ def interp_divide_unit(bbox, inner_flow, frame):
     bot   = np.clip(bot, 0, height-1).astype(np.int)
 
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot
-        ,"velo": f"{flow_mean}"
-        })
+        "left": left, "top": top, "right": right, "bot": bot})
 
 def interp_linear(bboxes, flow, frame):
     frame_rows = frame.shape[0]

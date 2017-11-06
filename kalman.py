@@ -14,7 +14,7 @@ from draw import draw_none
 from vis import open_video
 from interp import draw_i_frame, draw_p_frame, find_inner, calc_flow_mean
 from interp import interp_linear_unit, interp_divide_unit
-from interp import calc_flow_mean_grid, calc_flow_mean_heuristic
+from interp import calc_flow_mean_grad, calc_flow_mean_heuristic
 from interp import calc_flow_mean_mixture, calc_flow_mean_median
 
 def calc_center(bbox):
@@ -106,7 +106,7 @@ class KalmanInterpolator:
 
         return state[0:self.mp].flatten()
 
-def interp_divkal_unit(bbox, inner_flow, frame):
+def interp_divgra_unit(bbox, inner_flow, frame):
     if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
         left  = np.int(bbox.left)
         top   = np.int(bbox.top)
@@ -120,8 +120,6 @@ def interp_divkal_unit(bbox, inner_flow, frame):
     upper_right = calc_flow_mean_grad(inner_flow[:center[0], center[1]:])
     lower_left = calc_flow_mean_grad(inner_flow[center[0]:, :center[1]])
     lower_right = calc_flow_mean_grad(inner_flow[center[0]:, center[1]:])
-
-    flow_mean = calc_flow_mean(inner_flow)
 
     left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
     top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
@@ -190,7 +188,7 @@ def interp_kalman(bboxes, flow, frame, kalman, calc=calc_flow_mean):
                                                     kalman)
 
         # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
-        # bboxes.loc[bbox.Index] = interp_divkal_unit(bbox, inner_flow, frame)
+        # bboxes.loc[bbox.Index] = interp_divgra_unit(bbox, inner_flow, frame)
 
     return bboxes
 
