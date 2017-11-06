@@ -44,19 +44,19 @@ import filterpy.kalman
 # delegated class
 class KalmanInterpolator:
     def __init__(self, dp=2, mp=2, cp=2, processNoise=1e-0, measurementNoise=1e-1):
-        # self.kalman = cv2.KalmanFilter(dp, mp, cp)
-        # self.kalman.transitionMatrix = np.float32(1.0 * np.eye(dp, dp))
-        # self.kalman.controlMatrix = np.float32(1.0 * np.eye(dp, cp))
-        # self.kalman.measurementMatrix = np.float32(1.0 * np.eye(mp, dp))
-        # self.kalman.processNoiseCov = np.float32(processNoise * np.eye(dp, dp))
-        # self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(mp, mp))
+        self.kalman = cv2.KalmanFilter(dp, mp, cp)
+        self.kalman.transitionMatrix = np.float32(1.0 * np.eye(dp, dp))
+        self.kalman.controlMatrix = np.float32(1.0 * np.eye(dp, cp))
+        self.kalman.measurementMatrix = np.float32(1.0 * np.eye(mp, dp))
+        self.kalman.processNoiseCov = np.float32(processNoise * np.eye(dp, dp))
+        self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(mp, mp))
 
-        self.kalman = filterpy.kalman.KalmanFilter(dim_x=dp, dim_z=mp, dim_u=cp)
-        self.kalman.F = np.float32(1.0 * np.eye(dp, dp))
-        self.kalman.B = np.float32(1.0 * np.eye(dp, cp))
-        self.kalman.H = np.float32(1.0 * np.eye(mp, dp))
-        self.kalman.Q = np.float32(processNoise * np.eye(dp, dp))
-        self.kalman.R = np.float32(measurementNoise * np.eye(mp, mp))
+        # self.kalman = filterpy.kalman.KalmanFilter(dim_x=dp, dim_z=mp, dim_u=cp)
+        # self.kalman.F = np.float32(1.0 * np.eye(dp, dp))
+        # self.kalman.B = np.float32(1.0 * np.eye(dp, cp))
+        # self.kalman.H = np.float32(1.0 * np.eye(mp, dp))
+        # self.kalman.Q = np.float32(processNoise * np.eye(dp, dp))
+        # self.kalman.R = np.float32(measurementNoise * np.eye(mp, mp))
 
         self.total = 0
         self.count = 0
@@ -84,30 +84,32 @@ class KalmanInterpolator:
                     (1.0 * np.eye(self.dp, self.dp)).astype(np.float32))
 
     def predict(self, control):
-        # self.kalman.statePost = self.stateList[self.count]
-        # self.kalman.errorCovPost = self.errorCovList[self.count]
-        self.kalman.x = self.stateList[self.count]
-        self.kalman.P = self.errorCovList[self.count]
-        self.kalman.predict(control)
-        return self.kalman.x.reshape(self.mp, 1)
+        self.kalman.statePost = self.stateList[self.count]
+        self.kalman.errorCovPost = self.errorCovList[self.count]
+        result = self.kalman.predict(control)
+        return result.reshape(self.mp, 1)
+        # self.kalman.x = self.stateList[self.count]
+        # self.kalman.P = self.errorCovList[self.count]
+        # self.kalman.predict(control)
+        # return self.kalman.x.reshape(self.mp, 1)
 
     def update(self, measurement):
-        # result = self.kalman.correct(measurement)
-        # self.stateList[self.count] = self.kalman.statePost
-        # self.errorCovList[self.count] = self.kalman.errorCovPost
-        self.kalman.update(measurement)
-        self.stateList[self.count] = self.kalman.x
-        self.errorCovList[self.count] = self.kalman.P
+        result = self.kalman.correct(measurement)
+        self.stateList[self.count] = self.kalman.statePost
+        self.errorCovList[self.count] = self.kalman.errorCovPost
+        # self.kalman.update(measurement)
+        # self.stateList[self.count] = self.kalman.x
+        # self.errorCovList[self.count] = self.kalman.P
 
     def filter(self, center, flow_mean):
         flow_mean = flow_mean.astype(np.float32)
         state = self.predict(flow_mean)
         noise = np.random.randn(self.mp, 1)
 
-        # new_center = np.dot(self.kalman.measurementMatrix, state) \
-        #            + np.dot(self.kalman.measurementNoiseCov, noise)
-        new_center = np.dot(self.kalman.H, state) \
-                   + np.dot(self.kalman.R, noise)
+        new_center = np.dot(self.kalman.measurementMatrix, state) \
+                   + np.dot(self.kalman.measurementNoiseCov, noise)
+        # new_center = np.dot(self.kalman.H, state) \
+        #            + np.dot(self.kalman.R, noise)
         new_center = new_center.flatten().astype(np.float32)
 
         self.update(new_center)
