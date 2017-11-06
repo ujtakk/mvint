@@ -19,9 +19,9 @@ MOT16-13
 
 # echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --baseline
 # echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --worst
-# echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py
+echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py
 
-echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --display
+# echo $MOT_TRAIN | xargs -P 8 -n 1 python sort.py --display
 
 # for mot in $MOT_TRAIN; do
 #   python sort.py $mot

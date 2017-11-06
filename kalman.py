@@ -14,6 +14,8 @@ from draw import draw_none
 from vis import open_video
 from interp import draw_i_frame, draw_p_frame, find_inner, calc_flow_mean
 from interp import interp_linear_unit, interp_divide_unit
+from interp import calc_flow_mean_grid, calc_flow_mean_heuristic
+from interp import calc_flow_mean_mixture, calc_flow_mean_median
 
 def calc_center(bbox):
     center_y = np.mean((bbox.bot, bbox.top))
@@ -40,7 +42,6 @@ def invert(bbox):
     right = left + width
     return pd.Series({"left": left, "top": top, "right": right, "bot": bot})
 
-import filterpy.kalman
 # delegated class
 class KalmanInterpolator:
     def __init__(self, dp=2, mp=2, cp=2, processNoise=1e-0, measurementNoise=1e-1):
@@ -50,13 +51,6 @@ class KalmanInterpolator:
         self.kalman.measurementMatrix = np.float32(1.0 * np.eye(mp, dp))
         self.kalman.processNoiseCov = np.float32(processNoise * np.eye(dp, dp))
         self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(mp, mp))
-
-        # self.kalman = filterpy.kalman.KalmanFilter(dim_x=dp, dim_z=mp, dim_u=cp)
-        # self.kalman.F = np.float32(1.0 * np.eye(dp, dp))
-        # self.kalman.B = np.float32(1.0 * np.eye(dp, cp))
-        # self.kalman.H = np.float32(1.0 * np.eye(mp, dp))
-        # self.kalman.Q = np.float32(processNoise * np.eye(dp, dp))
-        # self.kalman.R = np.float32(measurementNoise * np.eye(mp, mp))
 
         self.total = 0
         self.count = 0
@@ -88,18 +82,11 @@ class KalmanInterpolator:
         self.kalman.errorCovPost = self.errorCovList[self.count]
         result = self.kalman.predict(control)
         return result.reshape(self.mp, 1)
-        # self.kalman.x = self.stateList[self.count]
-        # self.kalman.P = self.errorCovList[self.count]
-        # self.kalman.predict(control)
-        # return self.kalman.x.reshape(self.mp, 1)
 
     def update(self, measurement):
         result = self.kalman.correct(measurement)
         self.stateList[self.count] = self.kalman.statePost
         self.errorCovList[self.count] = self.kalman.errorCovPost
-        # self.kalman.update(measurement)
-        # self.stateList[self.count] = self.kalman.x
-        # self.errorCovList[self.count] = self.kalman.P
 
     def filter(self, center, flow_mean):
         flow_mean = flow_mean.astype(np.float32)
@@ -108,8 +95,6 @@ class KalmanInterpolator:
 
         new_center = np.dot(self.kalman.measurementMatrix, state) \
                    + np.dot(self.kalman.measurementNoiseCov, noise)
-        # new_center = np.dot(self.kalman.H, state) \
-        #            + np.dot(self.kalman.R, noise)
         new_center = new_center.flatten().astype(np.float32)
 
         self.update(new_center)
@@ -121,47 +106,40 @@ class KalmanInterpolator:
 
         return state[0:self.mp].flatten()
 
-def divergence(field):
-    grad_x = np.gradient(field[:, :, 0], axis=1)
-    grad_y = np.gradient(field[:, :, 1], axis=0)
-    div = grad_x + grad_y
-    return div
+def interp_divkal_unit(bbox, inner_flow, frame):
+    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+        left  = np.int(bbox.left)
+        top   = np.int(bbox.top)
+        right = np.int(bbox.right)
+        bot   = np.int(bbox.bot)
+        return pd.Series({"name": bbox.name, "prob": bbox.prob,
+            "left": left, "top": top, "right": right, "bot": bot})
 
-def calc_flow_mean_kalman(inner_flow, kalman):
-    if inner_flow.shape[0] > 1 and inner_flow.shape[1] > 1:
-        # grad_x = np.abs(np.gradient(inner_flow[:, :, 0], axis=1))
-        # if np.sum(grad_x) == 0:
-        #     grad_x = np.ones_like(grad_x)
-        # grad_y = np.abs(np.gradient(inner_flow[:, :, 1], axis=0))
-        # if np.sum(grad_y) == 0:
-        #     grad_y = np.ones_like(grad_y)
-        # div_flow = np.stack((grad_x, grad_y), axis=-1)
-        div_flow = np.abs(divergence(inner_flow))
-        if np.sum(div_flow) == 0:
-            div_flow = np.ones_like(div_flow)
-        div_flow = np.stack((div_flow, div_flow), axis=-1)
-        flow_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
-    else:
-        flow_mean = np.mean(inner_flow, axis=(0, 1))
+    center = np.asarray(inner_flow.shape) // 2
+    upper_left = calc_flow_mean_grad(inner_flow[:center[0], :center[1]])
+    upper_right = calc_flow_mean_grad(inner_flow[:center[0], center[1]:])
+    lower_left = calc_flow_mean_grad(inner_flow[center[0]:, :center[1]])
+    lower_right = calc_flow_mean_grad(inner_flow[center[0]:, center[1]:])
 
-    # kalman.update(flow_mean)
-    # kalman.predict()
-    # new_flow_mean = kalman.x
-    new_flow_mean = flow_mean
+    flow_mean = calc_flow_mean(inner_flow)
 
-    return np.nan_to_num(new_flow_mean)
+    left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
+    top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
+    right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
+    bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
 
-def sigmoid(x, alpha=20.0, scale=1.0, offset=(0.2, 1.0)):
-# def sigmoid(x, alpha=10.0, scale=2.0, offset=(0.5, 1.0)):
-    return scale / (1 + np.exp(-alpha*(x-offset[0]))) + offset[1]
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
 
 def interp_kalman_unit(bbox, flow_mean, frame, kalman):
-    # size_rate = ((bbox.right - bbox.left) * (bbox.bot-bbox.top)) \
-    #           / (frame.shape[0] * frame.shape[1])
-    # size_rate = np.sqrt(size_rate)
-    # flow_mean *= sigmoid(size_rate)
-    # flow_mean *= 1 + np.nan_to_num(size_rate)
-
     center = calc_center(bbox)
     new_center = kalman.filter(center, flow_mean)
     frame_mean = new_center - center
@@ -184,7 +162,7 @@ def interp_kalman_unit(bbox, flow_mean, frame, kalman):
         ,"velo": f"{flow_mean}"
         })
 
-def interp_kalman(bboxes, flow, frame, kalman):
+def interp_kalman(bboxes, flow, frame, kalman, calc=calc_flow_mean):
     frame_rows = frame.shape[0]
     frame_cols = frame.shape[1]
     assert(frame.shape[2] == 3)
@@ -200,25 +178,27 @@ def interp_kalman(bboxes, flow, frame, kalman):
     for bbox in bboxes.itertuples():
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
 
+        # flow_mean = calc(inner_flow)
         # flow_mean = calc_flow_mean(inner_flow)
-        # bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
-        #                                             kalman)
+        flow_mean = calc_flow_mean_grad(inner_flow)
+        # flow_mean = calc_flow_mean_mixture(inner_flow)
+        # flow_mean = calc_flow_mean_median(inner_flow)
+        # flow_mean = calc_flow_mean_heuristic(inner_flow, bbox, frame)
 
-        # flow_mean = calc_flow_mean_kalman(inner_flow, bbox.kalman)
-        flow_mean = calc_flow_mean_kalman(inner_flow, None)
+        # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
         bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
                                                     kalman)
-        # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
         # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
+        # bboxes.loc[bbox.Index] = interp_divkal_unit(bbox, inner_flow, frame)
 
     return bboxes
 
-def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
-    if base and worst:
+def vis_kalman(movie, header, flow, bboxes, baseline=False, worst=False):
+    if baseline and worst:
         raise "rendering mode could not be duplicated"
 
-    if base:
+    if baseline:
         cap, out = open_video(movie, postfix="base")
     elif worst:
         cap, out = open_video(movie, postfix="worst")
@@ -239,7 +219,7 @@ def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
         if ret is False or i > bboxes.size:
             break
 
-        if base:
+        if baseline:
             pos = i
             frame = draw_i_frame(frame, flow[i], bboxes[pos])
         elif header["pict_type"][i] == "I":
@@ -263,11 +243,11 @@ def vis_kalman(movie, header, flow, bboxes, base=False, worst=False):
     cap.release()
     out.release()
 
-def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
-    if base and worst:
+def vis_composed(movie, header, flow, bboxes, baseline=False, worst=False):
+    if baseline and worst:
         raise "rendering mode could not be duplicated"
 
-    if base:
+    if baseline:
         cap, out = open_video(movie, postfix="base")
     elif worst:
         cap, out = open_video(movie, postfix="worst")
@@ -278,9 +258,12 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    kalman = KalmanInterpolator()
-    interp_kalman_clos = lambda bboxes, flow, frame: \
-            interp_kalman(bboxes, flow, frame, kalman)
+    kalman_0 = KalmanInterpolator()
+    kalman_clos_0 = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman_0, calc=calc_flow_mean)
+    kalman_1 = KalmanInterpolator()
+    kalman_clos_1 = lambda bboxes, flow, frame: \
+            interp_kalman(bboxes, flow, frame, kalman_1, calc=calc_flow_mean_grad)
 
     color = (255, 0, 255)
 
@@ -291,7 +274,7 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
             break
 
         # linear
-        if base:
+        if baseline:
             pos = i
             bboxes_0 = bboxes[pos].copy()
             bboxes_1 = bboxes[pos].copy()
@@ -305,15 +288,17 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
 
             frame = draw_i_frame(frame, flow[i], bboxes_0)
             frame = draw_i_frame(frame, flow[i], bboxes_1, color=color)
-            kalman.reset(bboxes[pos])
+            kalman_0.reset(bboxes[pos])
+            kalman_1.reset(bboxes[pos])
         elif worst:
             frame = draw_i_frame(frame, flow[i], bboxes_0)
             frame = draw_i_frame(frame, flow[i], bboxes_1, color=color)
         else:
             # bboxes_0 is updated by reference
-            frame = draw_p_frame(frame, flow[i], bboxes_0)
+            frame = draw_p_frame(frame, flow[i], bboxes_0,
+                                 interp=kalman_clos_0)
             frame = draw_p_frame(frame, flow[i], bboxes_1, color=color,
-                                 interp=interp_kalman_clos)
+                                 interp=kalman_clos_1)
 
         cv2.rectangle(frame, (width-220, 20), (width-20, 60), (0, 0, 0), -1)
         cv2.putText(frame,
@@ -328,7 +313,7 @@ def vis_composed(movie, header, flow, bboxes, base=False, worst=False):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
-    parser.add_argument("--base",
+    parser.add_argument("--baseline",
                         action="store_true", default=False,
                         help="render P-frame by true bbox")
     parser.add_argument("--worst",
@@ -341,10 +326,10 @@ def main():
 
     flow, header = get_flow(args.movie)
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    # vis_kalman(args.movie, header, flow, bboxes,
-    #            base=args.base, worst=args.worst)
-    vis_composed(args.movie, header, flow, bboxes,
-                 base=args.base, worst=args.worst)
+    vis_kalman(args.movie, header, flow, bboxes,
+               baseline=args.baseline, worst=args.worst)
+    # vis_composed(args.movie, header, flow, bboxes,
+    #              baseline=args.baseline, worst=args.worst)
 
 if __name__ == "__main__":
     main()

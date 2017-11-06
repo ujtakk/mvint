@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from tqdm import trange
 
+from flow import get_flow
+from kalman import vis_composed
 from mapping import Mapper, SimpleMapper, KalmanMapper
 from eval_mot16 import MOT16, eval_mot16
 
@@ -364,6 +366,12 @@ def main():
                baseline=args.baseline,
                worst=args.worst,
                display=args.display)
+
+    # movie = join("MOT16", "train", args.src_id)
+    # flow, header = get_flow(movie)
+    # mot = MOT16_SORT(args.src_id)
+    # bboxes = mot.pick_bboxes()
+    # vis_composed(movie, header, flow, bboxes)
 
 if __name__ == "__main__":
     main()

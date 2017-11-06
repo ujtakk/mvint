@@ -56,52 +56,81 @@ def calc_flow_mean(inner_flow, filling_rate=1.0):
     # TODO: divide each corner
     flow_mean *= 1.0 / filling_rate
 
-    # try:
-    #     grad_x = np.gradient(inner_flow[:, :, 0], axis=1)
-    #     grad_y = np.gradient(inner_flow[:, :, 1], axis=0)
-    #     div_flow = np.stack((grad_x, grad_y), axis=-1)
-    #
-    #     # grad_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
-    #     # har_mean = sp.stats.hmean((np.linalg.norm(flow_mean),
-    #     #                            np.linalg.norm(grad_mean)))
-    #     # flow_mean *= np.linalg.norm(grad_mean) / np.linalg.norm(flow_mean)
-    #
-    #     flow_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
-    # except:
-    #     pass
+    return np.nan_to_num(flow_mean)
+
+def calc_flow_mean_grad(inner_flow):
+    def divergence(field):
+        grad_x = np.gradient(field[:, :, 0], axis=1)
+        grad_y = np.gradient(field[:, :, 1], axis=0)
+        div = grad_x + grad_y
+        return div
+
+    if inner_flow.shape[0] > 1 and inner_flow.shape[1] > 1:
+        # grad_x = np.abs(np.gradient(inner_flow[:, :, 0], axis=1))
+        # if np.sum(grad_x) == 0:
+        #     grad_x = np.ones_like(grad_x)
+        # grad_y = np.abs(np.gradient(inner_flow[:, :, 1], axis=0))
+        # if np.sum(grad_y) == 0:
+        #     grad_y = np.ones_like(grad_y)
+        # div_flow = np.stack((grad_x, grad_y), axis=-1)
+        div_flow = np.abs(divergence(inner_flow))
+        if np.sum(div_flow) == 0:
+            div_flow = np.ones_like(div_flow)
+        div_flow = np.stack((div_flow, div_flow), axis=-1)
+        flow_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
+    else:
+        flow_mean = np.mean(inner_flow, axis=(0, 1))
 
     return np.nan_to_num(flow_mean)
 
-def median_mean(inner_flow):
+def calc_flow_mean_heuristic(inner_flow, bbox, frame):
+    def sigmoid(x, alpha=20.0, scale=1.0, offset=(0.2, 1.0)):
+    # def sigmoid(x, alpha=10.0, scale=2.0, offset=(0.5, 1.0)):
+        return scale / (1 + np.exp(-alpha*(x-offset[0]))) + offset[1]
+
+    flow_mean = calc_flow_mean(inner_flow)
+
+    size_rate = ((bbox.right - bbox.left) * (bbox.bot-bbox.top)) \
+              / (frame.shape[0] * frame.shape[1])
+    size_rate = np.sqrt(size_rate)
+
+    # flow_mean *= sigmoid(size_rate)
+    flow_mean *= 1 + np.nan_to_num(size_rate)
+
+    return np.nan_to_num(flow_mean)
+
+def calc_flow_mean_median(inner_flow, center=7):
+    h = center // 2
+
     flow = inner_flow.reshape((-1, 2))
     flow_norm = np.linalg.norm(flow, axis=1)
+
+    norm_index = np.argsort(flow_norm)
+    flow_mean = flow[norm_index[norm_index.shape[0]//2]]
+    return np.nan_to_num(flow_mean)
+
     norm_index = np.argsort(flow_norm)
     lower_median = norm_index[norm_index.shape[0]//4*1]
     upper_median = norm_index[norm_index.shape[0]//4*3]
-    flow_lut = inner_flow[inner_flow.shape[0]//2-1:inner_flow.shape[0]//2+2,
-                          inner_flow.shape[1]//2-1:inner_flow.shape[1]//2+2,
+
+    flow_lut = inner_flow[inner_flow.shape[0]//2-h:inner_flow.shape[0]//2+h+1,
+                          inner_flow.shape[1]//2-h:inner_flow.shape[1]//2+h+1,
                           :].reshape((-1, 2))
     judges = np.linalg.norm(flow_lut-flow[lower_median], axis=1) \
            < np.linalg.norm(flow_lut-flow[upper_median], axis=1)
 
-    if np.sum(judges) < 5:
+    if np.sum(judges) < h**2//2+1:
         frame_mean = flow[upper_median, :]
     else:
         frame_mean = flow[lower_median, :]
 
     return frame_mean.astype(np.float32)
 
-def calc_flow_mean_adhoc(inner_flow):
-    flow_mean = np.mean(inner_flow, axis=(0, 1))
-    # flow_mean = median_mean(inner_flow)
-
-    flow_mean *= 1 + np.nan_to_num(1.0 / np.nan_to_num(np.var(inner_flow, axis=(0, 1))))
-    # flow_mean *= np.nan_to_num(np.log2(np.std(inner_flow, axis=(0, 1))))
-    # flow_mean *= 1 + 1.0 / np.nanmean(np.std(inner_flow, axis=(0, 1)))
-
-    return np.nan_to_num(flow_mean)
-
 def calc_flow_mean_mixture(inner_flow):
+    inner_flow = inner_flow.reshape((-1, 2))
+    if inner_flow.shape[0] < 2:
+        return np.zeros((2,))
+
     dist = sklearn.mixture.GaussianMixture(n_components=2)
     # dist = sklearn.mixture.BayesianGaussianMixture(n_components=2)
     dist.fit(inner_flow)
@@ -211,10 +240,10 @@ def interp_linear(bboxes, flow, frame):
     for bbox in bboxes.itertuples():
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
 
-        # flow_mean = calc_flow_mean(inner_flow)
-        # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
+        flow_mean = calc_flow_mean(inner_flow)
+        bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
-        bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
+        # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
 
     return bboxes
 
@@ -232,11 +261,11 @@ def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear, color=(0, 255, 
     frame = draw_bboxes(frame, interp_bboxes, color=color)
     return frame
 
-def vis_interp(movie, header, flow, bboxes, base=False, worst=False):
-    if base and worst:
+def vis_interp(movie, header, flow, bboxes, baseline=False, worst=False):
+    if baseline and worst:
         raise "rendering mode could not be duplicated"
 
-    if base:
+    if baseline:
         cap, out = open_video(movie, postfix="base")
     elif worst:
         cap, out = open_video(movie, postfix="worst")
@@ -253,7 +282,7 @@ def vis_interp(movie, header, flow, bboxes, base=False, worst=False):
         if ret is False or i > bboxes.size:
             break
 
-        if base:
+        if baseline:
             pos = i
             frame = draw_i_frame(frame, flow[i], bboxes[pos])
         elif header["pict_type"][i] == "I":
@@ -278,7 +307,7 @@ def vis_interp(movie, header, flow, bboxes, base=False, worst=False):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
-    parser.add_argument("--base",
+    parser.add_argument("--baseline",
                         action="store_true", default=False,
                         help="render P-frame by true bbox")
     parser.add_argument("--worst",
@@ -295,7 +324,7 @@ def main():
     #     if not bbox.empty:
     #         bboxes[index] = bbox.query(f"prob >= 0.4")
     vis_interp(args.movie, header, flow, bboxes,
-               base=args.base, worst=args.worst)
+               baseline=args.baseline, worst=args.worst)
 
 if __name__ == "__main__":
     main()

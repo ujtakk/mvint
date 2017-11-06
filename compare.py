@@ -133,11 +133,11 @@ def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear, color=(0, 255, 
     frame = draw_bboxes(frame, interp_bboxes, color=color)
     return frame
 
-def vis_compare(movie, header, flow, bboxes, base=False, worst=False):
-    if base and worst:
+def vis_compare(movie, header, flow, bboxes, baseline=False, worst=False):
+    if baseline and worst:
         raise "rendering mode could not be duplicated"
 
-    if base:
+    if baseline:
         cap, out = open_video(movie, postfix="base")
     elif worst:
         cap, out = open_video(movie, postfix="worst")
@@ -156,7 +156,7 @@ def vis_compare(movie, header, flow, bboxes, base=False, worst=False):
         if ret is False or i > bboxes.size:
             break
 
-        if base:
+        if baseline:
             pos = i
             bboxes_0 = bboxes[pos].copy()
             bboxes_1 = bboxes[pos].copy()
@@ -193,7 +193,7 @@ def vis_compare(movie, header, flow, bboxes, base=False, worst=False):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
-    parser.add_argument("--base",
+    parser.add_argument("--baseline",
                         action="store_true", default=False,
                         help="render P-frame by true bbox")
     parser.add_argument("--worst",
@@ -208,7 +208,7 @@ def main():
     bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
 
     vis_compare(args.movie, header, flow, bboxes,
-               base=args.base, worst=args.worst)
+               baseline=args.baseline, worst=args.worst)
 
 if __name__ == "__main__":
     main()
