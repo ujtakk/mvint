@@ -127,6 +127,64 @@ class SimpleMapper(Mapper):
             yield self.id_map[bbox.Index], bbox
         self.prev_bboxes = bboxes
 
+import filterpy
+class KalmanMapper(Mapper):
+    def __init__(self, affinity=iou_cost, cost_thresh=1.0):
+        self.affinity = affinity
+        self.cost_thresh = cost_thresh
+        self.id_count = 1
+        self.id_map = dict()
+        self.kf_map = dict()
+        self.prev_bboxes = pd.DataFrame()
+
+    def _assign_id(self):
+        new_id = self.id_count
+        self.id_count += 1
+        return new_id
+
+    def _init_kalman(self, dp=2, mp=2, cp=0, processNoise=1e2, measurementNoise=1e1):
+        kalman = filterpy.kalman.KalmanFilter(dim_x=dp, dim_z=mp, dim_u=cp)
+        kalman.F = (1.0 * np.eye(dp, dp)).astype(np.float32)
+        # kalman.B = (1.0 * np.eye(dp, cp)).astype(np.float32)
+        kalman.H = (1.0 * np.eye(mp, dp)).astype(np.float32)
+        kalman.Q = (processNoise * np.eye(dp, dp)).astype(np.float32)
+        kalman.R = (measurementNoise * np.eye(mp, mp)).astype(np.float32)
+
+        kalman.x = (np.zeros(2)).astype(np.float32)
+        kalman.P = (1.0 * np.eye(dp, dp)).astype(np.float32)
+
+        return kalman
+
+    def set(self, bboxes):
+        cost = calc_cost(self.prev_bboxes, bboxes, self.affinity)
+        row_idx, col_idx = sp.optimize.linear_sum_assignment(cost)
+
+        kf_map = dict()
+        id_map = dict()
+        for bbox in bboxes.itertuples():
+            if bbox.Index in col_idx:
+                arg_idx = np.where(col_idx == bbox.Index)[0][0]
+                trans_cost = cost[row_idx, col_idx][arg_idx]
+                if trans_cost <= self.cost_thresh:
+                    kf_map[bbox.Index] = self.kf_map[row_idx[arg_idx]]
+                    id_map[bbox.Index] = self.id_map[row_idx[arg_idx]]
+                else:
+                    kf_map[bbox.Index] = self._init_kalman()
+                    id_map[bbox.Index] = self._assign_id()
+            else:
+                kf_map[bbox.Index] = self._init_kalman()
+                id_map[bbox.Index] = self._assign_id()
+
+        self.kf_map = kf_map
+        self.id_map = id_map
+
+    def get(self, bboxes):
+        for bbox in bboxes.itertuples():
+            idx = bbox.Index
+            bboxes.loc[idx, "kalman"] = self.kf_map[idx]
+            yield self.id_map[idx], bbox
+        self.prev_bboxes = bboxes
+
 def parse_opt():
     parser = argparse.ArgumentParser()
     return parser.parse_args()

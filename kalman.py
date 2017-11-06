@@ -40,18 +40,23 @@ def invert(bbox):
     right = left + width
     return pd.Series({"left": left, "top": top, "right": right, "bot": bot})
 
+import filterpy
 # delegated class
 class KalmanInterpolator:
-    # def __init__(self, dp=8, mp=4, cp=2, processNoise=1e-0, measurementNoise=1e-1):
     def __init__(self, dp=2, mp=2, cp=2, processNoise=1e-0, measurementNoise=1e-1):
-        self.kalman = cv2.KalmanFilter(dp, mp, cp)
-        self.kalman.transitionMatrix = np.float32(1.0 * np.eye(dp, dp))
-        for i in range(dp-mp):
-            self.kalman.transitionMatrix[i, mp + i] = np.float32(1.0)
-        self.kalman.controlMatrix = np.float32(1.0 * np.eye(dp, cp))
-        self.kalman.measurementMatrix = np.float32(1.0 * np.eye(mp, dp))
-        self.kalman.processNoiseCov = np.float32(processNoise * np.eye(dp, dp))
-        self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(mp, mp))
+        # self.kalman = cv2.KalmanFilter(dp, mp, cp)
+        # self.kalman.transitionMatrix = np.float32(1.0 * np.eye(dp, dp))
+        # self.kalman.controlMatrix = np.float32(1.0 * np.eye(dp, cp))
+        # self.kalman.measurementMatrix = np.float32(1.0 * np.eye(mp, dp))
+        # self.kalman.processNoiseCov = np.float32(processNoise * np.eye(dp, dp))
+        # self.kalman.measurementNoiseCov = np.float32(measurementNoise * np.eye(mp, mp))
+
+        self.kalman = filterpy.kalman.KalmanFilter(dim_x=dp, dim_z=mp, dim_u=cp)
+        self.kalman.F = np.float32(1.0 * np.eye(dp, dp))
+        self.kalman.B = np.float32(1.0 * np.eye(dp, cp))
+        self.kalman.H = np.float32(1.0 * np.eye(mp, dp))
+        self.kalman.Q = np.float32(processNoise * np.eye(dp, dp))
+        self.kalman.R = np.float32(measurementNoise * np.eye(mp, mp))
 
         self.total = 0
         self.count = 0
@@ -73,38 +78,39 @@ class KalmanInterpolator:
             self.total += 1
             self.stateList.append(
                 calc_center(bbox).astype(np.float32))
-                # np.append(convert(bbox), (1., 1., 1., 1.)).astype(np.float32))
 
         for i in range(self.total):
             self.errorCovList.append(
                     (1.0 * np.eye(self.dp, self.dp)).astype(np.float32))
 
     def predict(self, control):
-        self.kalman.statePost = self.stateList[self.count]
-        self.kalman.errorCovPost = self.errorCovList[self.count]
-        result = self.kalman.predict(control)
-        return result
+        # self.kalman.statePost = self.stateList[self.count]
+        # self.kalman.errorCovPost = self.errorCovList[self.count]
+        self.kalman.x = self.stateList[self.count]
+        self.kalman.P = self.errorCovList[self.count]
+        self.kalman.predict(control)
+        return self.kalman.x.reshape(self.mp, 1)
 
-    def correct(self, measurement):
-        result = self.kalman.correct(measurement)
-        self.stateList[self.count] = self.kalman.statePost
-        self.errorCovList[self.count] = self.kalman.errorCovPost
-        return result
+    def update(self, measurement):
+        # result = self.kalman.correct(measurement)
+        # self.stateList[self.count] = self.kalman.statePost
+        # self.errorCovList[self.count] = self.kalman.errorCovPost
+        self.kalman.update(measurement)
+        self.stateList[self.count] = self.kalman.x
+        self.errorCovList[self.count] = self.kalman.P
 
     def filter(self, center, flow_mean):
-    # def filter(self, bbox, flow_mean):
         flow_mean = flow_mean.astype(np.float32)
         state = self.predict(flow_mean)
         noise = np.random.randn(self.mp, 1)
 
-        # center = center.reshape(self.mp, 1)
-        new_center = np.dot(self.kalman.measurementMatrix, state) \
-                   + np.dot(self.kalman.measurementNoiseCov, noise)
-        new_center = new_center.astype(np.float32)
-        # new_center = center.astype(np.float32)
+        # new_center = np.dot(self.kalman.measurementMatrix, state) \
+        #            + np.dot(self.kalman.measurementNoiseCov, noise)
+        new_center = np.dot(self.kalman.H, state) \
+                   + np.dot(self.kalman.R, noise)
+        new_center = new_center.flatten().astype(np.float32)
 
-        self.correct(new_center)
-        # self.correct(convert(bbox))
+        self.update(new_center)
 
         if self.count == self.total-1:
             self.count = 0
@@ -112,6 +118,36 @@ class KalmanInterpolator:
             self.count += 1
 
         return state[0:self.mp].flatten()
+
+def divergence(field):
+    grad_x = np.gradient(field[:, :, 0], axis=1)
+    grad_y = np.gradient(field[:, :, 1], axis=0)
+    div = grad_x + grad_y
+    return div
+
+def calc_flow_mean_kalman(inner_flow, kalman):
+    if inner_flow.shape[0] > 1 and inner_flow.shape[1] > 1:
+        # grad_x = np.abs(np.gradient(inner_flow[:, :, 0], axis=1))
+        # if np.sum(grad_x) == 0:
+        #     grad_x = np.ones_like(grad_x)
+        # grad_y = np.abs(np.gradient(inner_flow[:, :, 1], axis=0))
+        # if np.sum(grad_y) == 0:
+        #     grad_y = np.ones_like(grad_y)
+        # div_flow = np.stack((grad_x, grad_y), axis=-1)
+        div_flow = np.abs(divergence(inner_flow))
+        if np.sum(div_flow) == 0:
+            div_flow = np.ones_like(div_flow)
+        div_flow = np.stack((div_flow, div_flow), axis=-1)
+        flow_mean = np.average(inner_flow, axis=(0, 1), weights=div_flow)
+    else:
+        flow_mean = np.mean(inner_flow, axis=(0, 1))
+
+    # kalman.update(flow_mean)
+    # kalman.predict()
+    # new_flow_mean = kalman.x
+    new_flow_mean = flow_mean
+
+    return np.nan_to_num(new_flow_mean)
 
 def sigmoid(x, alpha=20.0, scale=1.0, offset=(0.2, 1.0)):
 # def sigmoid(x, alpha=10.0, scale=2.0, offset=(0.5, 1.0)):
@@ -132,14 +168,6 @@ def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     top   = bbox.top + frame_mean[1]
     right = bbox.right + frame_mean[0]
     bot   = bbox.bot + frame_mean[1]
-
-    # new_bbox = kalman.filter(bbox, flow_mean)
-    # new_bbox = invert(new_bbox)
-    #
-    # left  = new_bbox.left
-    # top   = new_bbox.top
-    # right = new_bbox.right
-    # bot   = new_bbox.bot
 
     height = frame.shape[0]
     width = frame.shape[1]
@@ -170,9 +198,14 @@ def interp_kalman(bboxes, flow, frame, kalman):
     for bbox in bboxes.itertuples():
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
 
-        flow_mean = calc_flow_mean(inner_flow)
+        # flow_mean = calc_flow_mean(inner_flow)
+        # bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
+        #                                             kalman)
+
+        flow_mean = calc_flow_mean_kalman(inner_flow, bbox.kalman)
         bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
                                                     kalman)
+        # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
 
         # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
 

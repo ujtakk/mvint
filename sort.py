@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import trange
 
-from mapping import Mapper, SimpleMapper
+from mapping import Mapper, SimpleMapper, KalmanMapper
 from eval_mot16 import MOT16, eval_mot16
 
 from deep_sort.application_util import preprocessing
@@ -304,7 +304,8 @@ class MOT16_SORT(MOT16):
         self.min_height = 0.0
         self.frame_count = 1
 
-        self.mapper = SimpleMapper()
+        # self.mapper = SimpleMapper()
+        self.mapper = KalmanMapper()
         # self.mapper = SORTMapper()
         # self.mapper = DeepSORTMapper()
 
