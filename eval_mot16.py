@@ -42,7 +42,8 @@ class MOT16:
         if not exists(dst_dir):
             os.makedirs(dst_dir)
 
-        self.source = detinfo(join(src_dir, src_id))
+        self.source = detinfo(join(src_dir, src_id), poi=False)
+        # self.source = detinfo(join(src_dir, src_id), poi=True)
         self.target = open(join(dst_dir, f"{src_id}.txt"), "w")
 
         self.frame_count = 1
@@ -83,18 +84,19 @@ class MOT16:
 # }}}
 
 def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
-               thresh=0.0, baseline=False, worst=False, display=False):
+               thresh=0.0, baseline=False, worst=False, display=False,
+               gop=12):
 # {{{
     mot = MOT16(src_id)
     bboxes = mot.pick_bboxes()
 
     movie = join(prefix, src_id)
-    flow, header = get_flow(movie, prefix=".")
+    flow, header = get_flow(movie, prefix=".", gop=gop)
 
     if display:
-        cap, out = open_video(movie, use_out=True)
+        cap, out = open_video(movie, display=True)
     else:
-        cap = open_video(movie, use_out=False)
+        cap = open_video(movie, display=False)
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -148,6 +150,7 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
             out.write(frame)
     end = time.perf_counter()
     print(f"{src_id}: {count/(end-start):3.1f} FPS")
+    # print(f"{end-start:5.2f}")
 
     cap.release()
     if display:
@@ -163,9 +166,9 @@ def eval_mot16_pred(src_id, model, prefix="MOT16/train", MOT16=MOT16,
     flow, header = get_flow(movie, prefix=".")
 
     if display:
-        cap, out = open_video(movie, use_out=True)
+        cap, out = open_video(movie, display=True)
     else:
-        cap = open_video(movie, use_out=False)
+        cap = open_video(movie, display=False)
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -231,6 +234,7 @@ def parse_opt():
     parser.add_argument("--model",
                         choices=("ssd300", "ssd512"), default="ssd512")
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--gop", type=int, default=12)
     return parser.parse_args()
 
 def main():
@@ -247,7 +251,8 @@ def main():
                    thresh=args.thresh,
                    baseline=args.baseline,
                    worst=args.worst,
-                   display=args.display)
+                   display=args.display,
+                   gop=args.gop)
 
 if __name__ == "__main__":
     main()

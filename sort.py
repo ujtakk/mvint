@@ -356,6 +356,7 @@ def parse_opt():
                         action="store_true", default=False)
     parser.add_argument("--display",
                         action="store_true", default=False)
+    parser.add_argument("--gop", type=int, default=12)
     return parser.parse_args()
 
 def main():
@@ -365,7 +366,8 @@ def main():
                thresh=args.thresh,
                baseline=args.baseline,
                worst=args.worst,
-               display=args.display)
+               display=args.display,
+               gop=args.gop)
 
     # movie = join("MOT16", "train", args.src_id)
     # flow, header = get_flow(movie)

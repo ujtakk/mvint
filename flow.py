@@ -22,8 +22,9 @@ VIS_CMD = join("mpegflow", "vis")
 
 # refer to gpac/src/media_tools/av_parsers.c for profile and level
 # TODO: profile and level option for mpeg4 in ffmpeg won't be active.
-# def dump_flow(movie, prefix=None, codec="h264"):
-def dump_flow(movie, prefix=None, codec="mpeg4"):
+# def dump_flow(movie, prefix=None, codec="h264", gop=12):
+# def dump_flow(movie, prefix=None, codec="mpeg4", gop=12):
+def dump_flow(movie, prefix=None, codec="mpeg2", gop=12):
     if prefix is None:
         prefix = movie
 
@@ -34,9 +35,10 @@ def dump_flow(movie, prefix=None, codec="mpeg4"):
 
         option = {
             # "h264": f"-codec:v libx264 -sc_threshold 0 -g 12 -b_strategy 0 -bf 2",
-            "h264": f"-codec:v libx264 -profile:v baseline -sc_threshold 0 -g 12",
-            "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 8 -sc_threshold 0 -g 12",
-            "mpeg2": f"-codec:v mpeg2video",
+            "h264": f"-codec:v libx264 -profile:v baseline -level 3.0 -sc_threshold 0 -g {gop}",
+            # "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 8 -sc_threshold 0 -g {gop}",
+            "mpeg4": f"-codec:v mpeg4 -profile:v 0 -level 1 -sc_threshold 0 -g {gop}",
+            "mpeg2": f"-codec:v mpeg2video -profile:v 5 -level 8 -sc_threshold 0 -g {gop}",
         }
 
         if codec not in option:
@@ -95,8 +97,8 @@ def pick_flow(movie, prefix=None):
 
     return flow, header
 
-def get_flow(movie, vis=False, occupancy=False, prefix=None):
-    dump_flow(movie, prefix=prefix)
+def get_flow(movie, vis=False, occupancy=False, prefix=None, gop=12):
+    dump_flow(movie, prefix=prefix, gop=gop)
 
     movie_file = join(movie, basename(movie)) + ".avi"
 

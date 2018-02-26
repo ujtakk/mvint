@@ -144,7 +144,7 @@ def vis_histogram(movie, header, flow, bboxes):
     if not os.path.exists(os.path.join("graph", graph_prefix)):
         os.makedirs(os.path.join("graph", graph_prefix))
 
-    cap = open_video(movie, use_out=False)
+    cap = open_video(movie, display=False)
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

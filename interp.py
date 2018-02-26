@@ -89,13 +89,15 @@ def calc_flow_mean_heuristic(inner_flow, bbox, frame):
         return scale / (1 + np.exp(-alpha*(x-offset[0]))) + offset[1]
 
     flow_mean = calc_flow_mean(inner_flow)
+    # flow_mean = calc_flow_mean_grad(inner_flow)
 
     size_rate = ((bbox.right - bbox.left) * (bbox.bot-bbox.top)) \
               / (frame.shape[0] * frame.shape[1])
     size_rate = np.sqrt(size_rate)
 
     # flow_mean *= sigmoid(size_rate)
-    flow_mean *= 1 + np.nan_to_num(size_rate)
+    # flow_mean *= 1 + np.nan_to_num(size_rate)
+    flow_mean /= 1 - np.nan_to_num(size_rate)
 
     return np.nan_to_num(flow_mean)
 
@@ -209,6 +211,85 @@ def interp_divide_unit(bbox, inner_flow, frame):
 
     height = frame.shape[0]
     width = frame.shape[1]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
+
+def interp_divgra_unit(bbox, inner_flow, frame):
+    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+        left  = np.int(bbox.left)
+        top   = np.int(bbox.top)
+        right = np.int(bbox.right)
+        bot   = np.int(bbox.bot)
+        return pd.Series({"name": bbox.name, "prob": bbox.prob,
+            "left": left, "top": top, "right": right, "bot": bot})
+
+    center = np.asarray(inner_flow.shape) // 2
+    upper_left = calc_flow_mean_grad(inner_flow[:center[0], :center[1]])
+    upper_right = calc_flow_mean_grad(inner_flow[:center[0], center[1]:])
+    lower_left = calc_flow_mean_grad(inner_flow[center[0]:, :center[1]])
+    lower_right = calc_flow_mean_grad(inner_flow[center[0]:, center[1]:])
+
+    left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
+    top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
+    right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
+    bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
+
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    left  = np.clip(left, 0, width-1).astype(np.int)
+    top   = np.clip(top, 0, height-1).astype(np.int)
+    right = np.clip(right, 0, width-1).astype(np.int)
+    bot   = np.clip(bot, 0, height-1).astype(np.int)
+
+    return pd.Series({"name": bbox.name, "prob": bbox.prob,
+        "left": left, "top": top, "right": right, "bot": bot})
+
+def interp_size_unit(bbox, inner_flow, frame):
+    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+        left  = np.int(bbox.left)
+        top   = np.int(bbox.top)
+        right = np.int(bbox.right)
+        bot   = np.int(bbox.bot)
+        return pd.Series({"name": bbox.name, "prob": bbox.prob,
+            "left": left, "top": top, "right": right, "bot": bot})
+
+    center = np.asarray(inner_flow.shape) // 2
+    height = frame.shape[0]
+    width = frame.shape[1]
+
+    flow_mean = calc_flow_mean(inner_flow)
+    # print((bbox_height*bbox_width)/(height*width))
+    # bbox_height = bbox.bot - bbox.top
+    # bbox_width  = bbox.right - bbox.left
+    # if (bbox_height*bbox_width)/(height*width) < 0.05:
+    #     flow_mean = calc_flow_mean(inner_flow)
+    # else:
+    #     flow_mean = calc_flow_mean_grad(inner_flow)
+    # left  = bbox.left + flow_mean[0]
+    # top   = bbox.top + flow_mean[1]
+    # right = bbox.right + flow_mean[0]
+    # bot   = bbox.bot + flow_mean[1]
+
+    beta = 0.5
+    upper_left = np.nanmean(inner_flow[:center[0], :center[1]], axis=(0, 1))
+    upper_right = np.nanmean(inner_flow[:center[0], center[1]:], axis=(0, 1))
+    lower_left = np.nanmean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
+    lower_right = np.nanmean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
+    # left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
+    # top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
+    # right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
+    # bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
+    left  = bbox.left  + beta * np.mean((upper_left,  lower_left),  axis=0)[0] + (1-beta) * flow_mean[0]
+    top   = bbox.top   + beta * np.mean((upper_left,  upper_right), axis=0)[1] + (1-beta) * flow_mean[1]
+    right = bbox.right + beta * np.mean((upper_right, lower_right), axis=0)[0] + (1-beta) * flow_mean[0]
+    bot   = bbox.bot   + beta * np.mean((lower_left,  lower_right), axis=0)[1] + (1-beta) * flow_mean[1]
 
     left  = np.clip(left, 0, width-1).astype(np.int)
     top   = np.clip(top, 0, height-1).astype(np.int)

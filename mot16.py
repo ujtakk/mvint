@@ -63,12 +63,17 @@ def gtinfo(path):
 
     return det
 
-def detinfo(path):
+def detinfo(path, poi=False):
     """
     Note that all values including the bounding box are 1-based,
     i.e. the top left corner corresponds to (1, 1).
     """
-    det = pd.read_csv(join(path, "det", "det.txt"), usecols=range(7),
+    if poi:
+        csv_path = join("MOT16_det_feat", basename(path)+"_det.txt")
+    else:
+        csv_path = join(path, "det", "det.txt")
+
+    det = pd.read_csv(csv_path, usecols=range(7),
                       names=("frame", "identity",
                              "left", "top", "width", "height", "score"))
 

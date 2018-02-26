@@ -33,6 +33,7 @@ def draw_bbox(frame, bbox, frame_mean=None, color=(0, 255, 0), caption=True):
     cv2.rectangle(frame, (bbox.left, bbox.top), (bbox.right, bbox.bot),
                   color, 4)
 
+    caption=False
     if caption:
         cv2.putText(frame, f"{bbox.name}: {bbox.prob}",
                     (bbox.left, bbox.top-10),

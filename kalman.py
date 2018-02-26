@@ -13,7 +13,8 @@ from annotate import pick_bbox, draw_bboxes
 from draw import draw_none
 from vis import open_video
 from interp import draw_i_frame, draw_p_frame, find_inner, calc_flow_mean
-from interp import interp_linear_unit, interp_divide_unit
+from interp import interp_linear_unit, interp_divide_unit, \
+                   interp_divgra_unit, interp_size_unit
 from interp import calc_flow_mean_grad, calc_flow_mean_heuristic
 from interp import calc_flow_mean_mixture, calc_flow_mean_median
 
@@ -106,37 +107,6 @@ class KalmanInterpolator:
 
         return state[0:self.mp].flatten()
 
-def interp_divgra_unit(bbox, inner_flow, frame):
-    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
-        left  = np.int(bbox.left)
-        top   = np.int(bbox.top)
-        right = np.int(bbox.right)
-        bot   = np.int(bbox.bot)
-        return pd.Series({"name": bbox.name, "prob": bbox.prob,
-            "left": left, "top": top, "right": right, "bot": bot})
-
-    center = np.asarray(inner_flow.shape) // 2
-    upper_left = calc_flow_mean_grad(inner_flow[:center[0], :center[1]])
-    upper_right = calc_flow_mean_grad(inner_flow[:center[0], center[1]:])
-    lower_left = calc_flow_mean_grad(inner_flow[center[0]:, :center[1]])
-    lower_right = calc_flow_mean_grad(inner_flow[center[0]:, center[1]:])
-
-    left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
-    top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
-    right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
-    bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
-
-    height = frame.shape[0]
-    width = frame.shape[1]
-
-    left  = np.clip(left, 0, width-1).astype(np.int)
-    top   = np.clip(top, 0, height-1).astype(np.int)
-    right = np.clip(right, 0, width-1).astype(np.int)
-    bot   = np.clip(bot, 0, height-1).astype(np.int)
-
-    return pd.Series({"name": bbox.name, "prob": bbox.prob,
-        "left": left, "top": top, "right": right, "bot": bot})
-
 def interp_kalman_unit(bbox, flow_mean, frame, kalman):
     center = calc_center(bbox)
     new_center = kalman.filter(center, flow_mean)
@@ -178,17 +148,17 @@ def interp_kalman(bboxes, flow, frame, kalman, calc=calc_flow_mean):
 
         # flow_mean = calc(inner_flow)
         # flow_mean = calc_flow_mean(inner_flow)
-        flow_mean = calc_flow_mean_grad(inner_flow)
+        # flow_mean = calc_flow_mean_grad(inner_flow)
         # flow_mean = calc_flow_mean_mixture(inner_flow)
         # flow_mean = calc_flow_mean_median(inner_flow)
         # flow_mean = calc_flow_mean_heuristic(inner_flow, bbox, frame)
 
         # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
-        bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame,
-                                                    kalman)
+        # bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame, kalman)
 
         # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
         # bboxes.loc[bbox.Index] = interp_divgra_unit(bbox, inner_flow, frame)
+        bboxes.loc[bbox.Index] = interp_size_unit(bbox, inner_flow, frame)
 
     return bboxes
 
@@ -323,11 +293,14 @@ def main():
     args = parse_opt()
 
     flow, header = get_flow(args.movie)
-    bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    vis_kalman(args.movie, header, flow, bboxes,
-               baseline=args.baseline, worst=args.worst)
-    # vis_composed(args.movie, header, flow, bboxes,
-    #              baseline=args.baseline, worst=args.worst)
+    # bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
+    from eval_mot16 import MOT16
+    mot = MOT16(os.path.basename(args.movie))
+    bboxes = mot.pick_bboxes()
+    # vis_kalman(args.movie, header, flow, bboxes,
+    #            baseline=args.baseline, worst=args.worst)
+    vis_composed(args.movie, header, flow, bboxes,
+                 baseline=args.baseline, worst=args.worst)
 
 if __name__ == "__main__":
     main()
