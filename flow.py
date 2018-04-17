@@ -169,7 +169,7 @@ def draw_flow(frame, flow):
             end = (start[0] + dx, start[1] + dy)
             end = tuple(map(int, end))
 
-            # frame = draw_grad(frame, start, div[i, j])
+            frame = draw_grad(frame, start, div[i, j])
             frame = draw_arrow(frame, start, end)
 
     return frame

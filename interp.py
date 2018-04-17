@@ -251,45 +251,76 @@ def interp_divgra_unit(bbox, inner_flow, frame):
     return pd.Series({"name": bbox.name, "prob": bbox.prob,
         "left": left, "top": top, "right": right, "bot": bot})
 
+def draw_center(frame, bbox, flow_mean):
+    def draw_arrow(frame, start, end, len=2.0, alpha=20.0,
+                   line_color=(255, 0, 0), start_color=(0, 255, 0)):
+        cv2.line(frame, start, end, line_color, 4)
+        cv2.circle(frame, end, 1, (0, 255, 255), -1)
+        cv2.circle(frame, start, 1, (255, 255, 0), -1)
+        return frame
+
+    def calc_center(bbox):
+        center_y = np.mean((bbox.bot, bbox.top))
+        center_x = np.mean((bbox.right, bbox.left))
+        center = np.asarray((center_x, center_y))
+
+        return center
+
+    start = calc_center(bbox)
+    start = tuple(map(int, start))
+    end = start + flow_mean
+    end = tuple(map(int, end))
+    frame = draw_arrow(frame, start, end)
+
+    return frame
+
 def interp_size_unit(bbox, inner_flow, frame):
-    if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
-        left  = np.int(bbox.left)
-        top   = np.int(bbox.top)
-        right = np.int(bbox.right)
-        bot   = np.int(bbox.bot)
-        return pd.Series({"name": bbox.name, "prob": bbox.prob,
-            "left": left, "top": top, "right": right, "bot": bot})
+    # if inner_flow.shape[0] < 2 or inner_flow.shape[1] < 2:
+    #     left  = np.int(bbox.left)
+    #     top   = np.int(bbox.top)
+    #     right = np.int(bbox.right)
+    #     bot   = np.int(bbox.bot)
+    #     return pd.Series({"name": bbox.name, "prob": bbox.prob,
+    #         "left": left, "top": top, "right": right, "bot": bot})
 
     center = np.asarray(inner_flow.shape) // 2
     height = frame.shape[0]
     width = frame.shape[1]
 
     flow_mean = calc_flow_mean(inner_flow)
+    # flow_mean = calc_flow_mean_grad(inner_flow)
+    # flow_mean_grad = calc_flow_mean_grad(inner_flow)
     # print((bbox_height*bbox_width)/(height*width))
     # bbox_height = bbox.bot - bbox.top
     # bbox_width  = bbox.right - bbox.left
-    # if (bbox_height*bbox_width)/(height*width) < 0.05:
+    # if (bbox_height*bbox_width)/(height*width) < 0.02:
     #     flow_mean = calc_flow_mean(inner_flow)
     # else:
     #     flow_mean = calc_flow_mean_grad(inner_flow)
-    # left  = bbox.left + flow_mean[0]
-    # top   = bbox.top + flow_mean[1]
-    # right = bbox.right + flow_mean[0]
-    # bot   = bbox.bot + flow_mean[1]
+    left  = bbox.left + flow_mean[0]
+    top   = bbox.top + flow_mean[1]
+    right = bbox.right + flow_mean[0]
+    bot   = bbox.bot + flow_mean[1]
 
-    beta = 0.5
-    upper_left = np.nanmean(inner_flow[:center[0], :center[1]], axis=(0, 1))
-    upper_right = np.nanmean(inner_flow[:center[0], center[1]:], axis=(0, 1))
-    lower_left = np.nanmean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
-    lower_right = np.nanmean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
-    # left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
-    # top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
-    # right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
-    # bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
-    left  = bbox.left  + beta * np.mean((upper_left,  lower_left),  axis=0)[0] + (1-beta) * flow_mean[0]
-    top   = bbox.top   + beta * np.mean((upper_left,  upper_right), axis=0)[1] + (1-beta) * flow_mean[1]
-    right = bbox.right + beta * np.mean((upper_right, lower_right), axis=0)[0] + (1-beta) * flow_mean[0]
-    bot   = bbox.bot   + beta * np.mean((lower_left,  lower_right), axis=0)[1] + (1-beta) * flow_mean[1]
+    # beta = 0.2
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore", category=RuntimeWarning)
+    #     upper_left = np.nanmean(inner_flow[:center[0], :center[1]], axis=(0, 1))
+    #     upper_right = np.nanmean(inner_flow[:center[0], center[1]:], axis=(0, 1))
+    #     lower_left = np.nanmean(inner_flow[center[0]:, :center[1]], axis=(0, 1))
+    #     lower_right = np.nanmean(inner_flow[center[0]:, center[1]:], axis=(0, 1))
+    #     left  = bbox.left + np.mean((upper_left, lower_left), axis=0)[0]
+    #     top   = bbox.top + np.mean((upper_left, upper_right), axis=0)[1]
+    #     right = bbox.right + np.mean((upper_right, lower_right), axis=0)[0]
+    #     bot   = bbox.bot + np.mean((lower_left, lower_right), axis=0)[1]
+    # left  = bbox.left  + beta * np.mean((upper_left,  lower_left),  axis=0)[0] + (1-beta) * flow_mean[0]
+    # top   = bbox.top   + beta * np.mean((upper_left,  upper_right), axis=0)[1] + (1-beta) * flow_mean[1]
+    # right = bbox.right + beta * np.mean((upper_right, lower_right), axis=0)[0] + (1-beta) * flow_mean[0]
+    # bot   = bbox.bot   + beta * np.mean((lower_left,  lower_right), axis=0)[1] + (1-beta) * flow_mean[1]
+    # left  = bbox.left  + beta * flow_mean_grad[0] + (1-beta) * flow_mean[0]
+    # top   = bbox.top   + beta * flow_mean_grad[1] + (1-beta) * flow_mean[1]
+    # right = bbox.right + beta * flow_mean_grad[0] + (1-beta) * flow_mean[0]
+    # bot   = bbox.bot   + beta * flow_mean_grad[1] + (1-beta) * flow_mean[1]
 
     left  = np.clip(left, 0, width-1).astype(np.int)
     top   = np.clip(top, 0, height-1).astype(np.int)
@@ -332,8 +363,23 @@ def draw_i_frame(frame, flow, bboxes, color=(0, 255, 0)):
 
 def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear, color=(0, 255, 0)):
     frame = draw_flow(frame, flow)
+    frame = draw_bboxes(frame, base_bboxes, color=color)
+    if True:
+        frame_rows = frame.shape[0]
+        frame_cols = frame.shape[1]
+        assert(frame.shape[2] == 3)
+        rows = flow.shape[0]
+        cols = flow.shape[1]
+        assert(flow.shape[2] == 2)
+        flow_index = np.asarray(tuple(np.ndindex((rows, cols))))
+        index_rate = np.asarray((frame_rows // rows, frame_cols // cols))
+        frame_index = flow_index * index_rate + (index_rate // 2)
+        for bbox in base_bboxes.itertuples():
+            inner_flow = find_inner(flow, bbox, flow_index, frame_index)
+            flow_mean = calc_flow_mean(inner_flow)
+            frame = draw_center(frame, bbox, flow_mean)
     interp_bboxes = interp(base_bboxes, flow, frame)
-    frame = draw_bboxes(frame, interp_bboxes, color=color)
+    # frame = draw_bboxes(frame, interp_bboxes, color=color)
     return frame
 
 def vis_interp(movie, header, flow, bboxes, baseline=False, worst=False):

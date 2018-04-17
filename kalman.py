@@ -147,18 +147,18 @@ def interp_kalman(bboxes, flow, frame, kalman, calc=calc_flow_mean):
         inner_flow = find_inner(flow, bbox, flow_index, frame_index)
 
         # flow_mean = calc(inner_flow)
-        # flow_mean = calc_flow_mean(inner_flow)
+        flow_mean = calc_flow_mean(inner_flow)
         # flow_mean = calc_flow_mean_grad(inner_flow)
         # flow_mean = calc_flow_mean_mixture(inner_flow)
         # flow_mean = calc_flow_mean_median(inner_flow)
         # flow_mean = calc_flow_mean_heuristic(inner_flow, bbox, frame)
 
         # bboxes.loc[bbox.Index] = interp_linear_unit(bbox, flow_mean, frame)
-        # bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame, kalman)
+        bboxes.loc[bbox.Index] = interp_kalman_unit(bbox, flow_mean, frame, kalman)
 
         # bboxes.loc[bbox.Index] = interp_divide_unit(bbox, inner_flow, frame)
         # bboxes.loc[bbox.Index] = interp_divgra_unit(bbox, inner_flow, frame)
-        bboxes.loc[bbox.Index] = interp_size_unit(bbox, inner_flow, frame)
+        # bboxes.loc[bbox.Index] = interp_size_unit(bbox, inner_flow, frame)
 
     return bboxes
 
