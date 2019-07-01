@@ -1,6 +1,8 @@
 CFLAGS = -O3 -D__STDC_CONSTANT_MACROS
-LDFLAGS = -lswscale -lavdevice -lavformat -lavcodec -lswresample -lavutil -lpthread -lbz2 -lz -lc -lrt
-INSTALLED_DEPS = -Idependencies/include -Ldependencies/lib
+# LDFLAGS = -lswscale -lavdevice -lavformat -lavcodec -lswresample -lavutil -lpthread -lbz2 -lz -lc -lrt
+LDFLAGS = -lswscale -lavdevice -lavformat -lavcodec -lswresample -lavutil -lpthread -lbz2 -lz -lc
+# INSTALLED_DEPS = -Idependencies/include -Ldependencies/lib
+INSTALLED_DEPS = `pkg-config --libs --cflags opencv`
 
 mpegflow: mpegflow.cpp
 	g++ $< -o $@ $(CFLAGS) $(LDFLAGS) $(INSTALLED_DEPS)

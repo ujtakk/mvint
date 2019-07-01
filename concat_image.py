@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""Snippet used to concat image (not maintained)
+"""
+
 import cv2
 import numpy as np
 

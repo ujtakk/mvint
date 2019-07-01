@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""DEPRECATED
+"""
+
 import pandas as pd
 
 pd.options.display.width = 999

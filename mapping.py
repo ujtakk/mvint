@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""Mapping bounding boxes using Hungarian method (w/ scipy.optimize.linear_sum_assignment)
+"""
+
 import argparse
 
 import numpy as np
