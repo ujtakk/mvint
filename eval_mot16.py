@@ -240,6 +240,7 @@ def parse_opt():
 def main():
     args = parse_opt()
     if args.pred:
+        # DEPRECATED
         eval_mot16_pred(args.src_id,
                         setup_model(args.param, args.model, args.gpu),
                         thresh=args.thresh,

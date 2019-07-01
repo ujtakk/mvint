@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""DEPRECATED
+"""
+
 import argparse
 import matplotlib.pyplot as plt
 

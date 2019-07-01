@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+"""Evaluate MOT16 using SORT
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+    --thresh: option[float]
+    --baseline: option[bool]
+    --worst: option[bool]
+    --gop: option[int]
+"""
+
 from os.path import join, exists, split
 import argparse
 
@@ -349,14 +360,19 @@ class MOT16_SORT(MOT16):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("src_id")
-    parser.add_argument("--thresh", type=float, default=0.4)
+    parser.add_argument("--thresh", type=float, default=0.4,
+                        help='')
     parser.add_argument("--baseline",
-                        action="store_true", default=False)
+                        action="store_true", default=False,
+                        help='')
     parser.add_argument("--worst",
-                        action="store_true", default=False)
+                        action="store_true", default=False,
+                        help='')
     parser.add_argument("--display",
-                        action="store_true", default=False)
-    parser.add_argument("--gop", type=int, default=12)
+                        action="store_true", default=False,
+                        help='')
+    parser.add_argument("--gop", type=int, default=12,
+                        help='')
     return parser.parse_args()
 
 def main():

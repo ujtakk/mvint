@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""DEPRECATED
+"""
+
 import os
 from os.path import join
 from glob import glob

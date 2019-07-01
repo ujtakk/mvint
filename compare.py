@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+"""Compare the interpolation method (See L.182 and L.184)
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+    --baseline: option[bool]
+    --worst: option[bool]
+"""
+
 import os
 import argparse
 from multiprocessing import Pool

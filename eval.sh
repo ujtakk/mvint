@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 MOT_TRAIN="
 MOT16-02

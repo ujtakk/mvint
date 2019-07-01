@@ -1,15 +1,16 @@
 #!/bin/bash
 # wget http://pjreddie.com/media/files/yolo9000.weights
 
+TOPLEVEL=`git rev-parse --show-toplevel`
 MOVIE=$1
 if [[ $MOVIE = "" ]]; then
-  MOVIE=/home/work/takau/6.image/flow_detect/movie/bird
+  MOVIE=$TOPLEVEL/movie/bird
 fi
 
-DARKNET=./darknet
-DATA=cfg/combine9k.data
-NETWORK=cfg/yolo9000.cfg
-WEIGHTS=yolo9000.weights
+DARKNET=$TOPLEVEL/darknet/darknet
+DATA=$TOPLEVEL/darknet/cfg/combine9k.data
+NETWORK=$TOPLEVEL/darknet/cfg/yolo9000.cfg
+WEIGHTS=$TOPLEVEL/darknet/yolo9000.weights
 SOURCE=`basename $MOVIE`.mp4
 TARGET=out_`basename $MOVIE`.mp4
 

@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 
+"""Annotate the interpolated bounding boxes with Kalman filter (See L.240 and L.243)
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+    --baseline: option[bool]
+    --worst: option[bool]
+    --compare: option[bool]
+"""
+
 import os
 import argparse
 
@@ -287,6 +297,9 @@ def parse_opt():
     parser.add_argument("--worst",
                         action="store_true", default=False,
                         help="render P-frame by base I-frame's bbox")
+    parser.add_argument("--compare",
+                        action="store_true", default=False,
+                        help="compare the interpolation method (see the L.240 and L.243)")
     return parser.parse_args()
 
 def main():
@@ -297,10 +310,12 @@ def main():
     from eval_mot16 import MOT16
     mot = MOT16(os.path.basename(args.movie))
     bboxes = mot.pick_bboxes()
-    # vis_kalman(args.movie, header, flow, bboxes,
-    #            baseline=args.baseline, worst=args.worst)
-    vis_composed(args.movie, header, flow, bboxes,
-                 baseline=args.baseline, worst=args.worst)
+    if args.compare:
+        vis_composed(args.movie, header, flow, bboxes,
+                     baseline=args.baseline, worst=args.worst)
+    else:
+        vis_kalman(args.movie, header, flow, bboxes,
+                   baseline=args.baseline, worst=args.worst)
 
 if __name__ == "__main__":
     main()

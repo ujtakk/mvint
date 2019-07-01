@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+"""Interpolating bounding boxes based on motion vectors
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+    --baseline: option[bool]
+    --worst: option[bool]
+"""
+
 import os
 import sys
 import argparse

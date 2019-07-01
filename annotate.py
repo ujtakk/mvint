@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+"""Annotate extracted motion vectors and bounding boxes to the movie.
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+"""
+
 import os
 from os.path import join, exists, basename
 import re

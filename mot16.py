@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+
+"""Prepare MOT16 dataset for evaluation
+"""
+
 import os
 import copy
 import argparse

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""Snippets used to concat movies (not maintained)
+"""
+
 import os
 import cv2
 import numpy as np

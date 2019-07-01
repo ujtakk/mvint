@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""DEPRECATED
+"""
+
 def annotate_bb(db):
 
 def youtube_bb_csv(csv_path):

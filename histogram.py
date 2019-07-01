@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+"""Analyze the motion field contained in bounding boxes
+Input:
+    movie: str
+        Directory name that contains the mp4 movie (encoded one)
+        (Name of the movie have to be same as the directory name)
+    --reset: option[bool]
+"""
+
 import os
 import time
 import pickle
@@ -163,7 +171,8 @@ def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
     parser.add_argument("--reset",
-                        action="store_true", default=False)
+                        action="store_true", default=False,
+                        help='refresh caches for motion vectors and bounding boxes')
     return parser.parse_args()
 
 def main():

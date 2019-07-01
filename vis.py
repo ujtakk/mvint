@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""Functions for visualizing and movie handling
+"""
+
 import os
 from os.path import join, exists, basename
 import argparse
