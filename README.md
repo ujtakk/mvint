@@ -13,6 +13,7 @@ Requirements
 As the utility for MVint, we use some modified version of Darknet [2]
 (placed under `darknet/`).
 Before using MVint scripts, we have to build it.
+
 To build Darknet, execute `make` from the root directory as:
 ```
 make -C darknet
@@ -26,9 +27,11 @@ make -C darknet GPU=1 CUDNN=1 OPENCV=1
 ### Building MPEG-flow
 We also use MPEG-flow [3] implementation to generate motion vectors
 from the target movie encoded by some specific codec.
+
 MPEG-flow contains two tools named `mpegflow` and `vis`.
 `mpegflow` uses FFmpeg (libavcodec) and `vis` uses OpenCV3,
 so we first have to prepare FFmpeg (libavcodec) / OpenCV3.
+
 Then, we build `mpegflow` and `vis` from the root directory as:
 ```
 make -C mpegflow mpegflow vis
@@ -56,13 +59,14 @@ To evaluate tracking performance, we first extract the bounding boxes offline.
 (Note: Offline detection is only for the convenience of evaluation.
 MVint is basically designed to be used in online tracking.)
 
-To extract the bounding boxes of given movie, execute the command below:
+To extract the bounding boxes of given movie, execute the command below:  
 (We used `movie/corgi/corgi.mp4` as an example movie.
 You have to place your target movie `TARGET.mp4` to the directory `movie/TARGET`.)
 ```
 ./darknet/extract.sh movie/corgi
 ```
 As the default extractor, we utilized Darknet implementation of YOLO9000 [2].
+
 Extracted bounding boxes are dumped into `movie/corgi/bbox_dump`.
 There is also the movie (`movie/corgi/out_corgi.mp4`) that bounding boxes are annotated.
 
