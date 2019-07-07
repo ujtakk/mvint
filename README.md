@@ -130,15 +130,13 @@ is redistributed under Creative Commons (CC-BY).
 References
 --------------------------------------------------
 
-```
-[1] T. Ujiie, M. Hiromoto, and T. Sato, "Interpolation-Based Object Detection Using Motion Vectors for Embedded Real-Time Tracking Systems", In Proceedings of CVPRW, 2018
-[2] J. Redmon and A. Farhadi, "YOLO9000: Better, Faster, Stronger", In Proceedings of CVPR, 2017
-[3] V. Kantorov and I. Laptev, "Efficient feature extraction, encoding and classification for action recognition", In Proceedings of CVPR, 2014
-[4] A. Milan, L. L. Taixé, I. D. Reid, S. Roth and K. Schindler, "MOT16: A Benchmark for Multi-Object Tracking", arxiv:1603.00831
-[5] A. Bewley, Z. Ge, L. Ott, F. Ramos, and B. Upcroft, "Simple Online and Realtime Tracking", In Proceedings of ICIP, 2016
-[6] N. Wojke, A. Bewley and D. Paulus, "Simple Online and Realtime Tracking with a Deep Association Metric", In Proceedings of ICIP, 2017
-[7] iPhotolife101, Corgi of BC Halloween Costume Parade, [URL](https://www.youtube.com/watch?v=blqjlztBYew)
-```
+[1] T. Ujiie, M. Hiromoto, and T. Sato, "Interpolation-Based Object Detection Using Motion Vectors for Embedded Real-Time Tracking Systems", In Proceedings of CVPRW, 2018  
+[2] J. Redmon and A. Farhadi, "YOLO9000: Better, Faster, Stronger", In Proceedings of CVPR, 2017  
+[3] V. Kantorov and I. Laptev, "Efficient feature extraction, encoding and classification for action recognition", In Proceedings of CVPR, 2014  
+[4] A. Milan, L. L. Taixé, I. D. Reid, S. Roth and K. Schindler, "MOT16: A Benchmark for Multi-Object Tracking", arxiv:1603.00831  
+[5] A. Bewley, Z. Ge, L. Ott, F. Ramos, and B. Upcroft, "Simple Online and Realtime Tracking", In Proceedings of ICIP, 2016  
+[6] N. Wojke, A. Bewley and D. Paulus, "Simple Online and Realtime Tracking with a Deep Association Metric", In Proceedings of ICIP, 2017  
+[7] iPhotolife101, Corgi of BC Halloween Costume Parade, [URL](https://www.youtube.com/watch?v=blqjlztBYew)  
 
 When you used this project for writing the paper,
 please cite our paper based on the bibtex below:
