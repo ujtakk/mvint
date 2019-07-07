@@ -56,24 +56,33 @@ To evaluate tracking performance, we first extract the bounding boxes offline.
 (Note: Offline detection is only for the convenience of evaluation.
 MVint is basically designed to be used in online tracking.)
 
-Default using Darknet implementation of YOLO9000 [2].
-
+To extract the bounding boxes of given movie, execute the command below:
+(We used `movie/hoge/hoge.mp4` as an example movie.
+You have to place your target movie `TARGET.mp4` to the directory `movie/TARGET`.)
 ```
 ./darknet/extract.sh movie/hoge
 ```
+As the default extractor, we utilized Darknet implementation of YOLO9000 [2].
+Extracted bounding boxes are dumped into `movie/hoge/bbox_dump`.
+There is also the movie (`movie/hoge/out_hoge.mp4`) that bounding boxes are annotated.
 
 ### Extract motion vectors using `mpegflow`
 
-We call MPEG-flow tools from scripts
+We call MPEG-flow tools from python scripts to generate motion vectors.
+You can visualize the motion vectors field of specific movie `movie/hoge/hoge.mp4`
+by the `flow.py` script as below:
 ```
 python flow.py movie/hoge
 ```
+Then the result movie is saved as `movie/hoge/hoge_flow.mp4`.
+Extracted motion vectors are dumped into `movie/hoge/mpegflow_dump`.
 
-To combine bounding boxes extracted above for showing,
+To combine bounding boxes extracted above for visualizing,
 we can use the `annotate.py` script as below:
 ```
 python annotate.py movie/hoge
 ```
+The result movie is saved as `movie/hoge/hoge_annotate.mp4`.
 
 ### Qualititative Evaluation
 In prior to quantitative evaluation,

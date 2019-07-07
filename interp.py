@@ -396,11 +396,11 @@ def vis_interp(movie, header, flow, bboxes, baseline=False, worst=False):
         raise "rendering mode could not be duplicated"
 
     if baseline:
-        cap, out = open_video(movie, postfix="base")
+        cap, out = open_video(movie, postfix="interp_w_baseline")
     elif worst:
-        cap, out = open_video(movie, postfix="worst")
+        cap, out = open_video(movie, postfix="interp_w_worst")
     else:
-        cap, out = open_video(movie)
+        cap, out = open_video(movie, postfix="interp")
 
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

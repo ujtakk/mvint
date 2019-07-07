@@ -199,7 +199,7 @@ def draw_flow(frame, flow):
     return frame
 
 def vis_flow(movie, flow, draw=draw_flow):
-    cap, out = open_video(movie)
+    cap, out = open_video(movie, postfix='flow')
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     for i in tqdm.trange(count):

@@ -30,10 +30,10 @@ def open_video(movie, postfix="out", display=True):
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     if display:
-        out_file = basename(movie) + f"_{postfix}.mp4"
+        out_file = movie_name + f"_{postfix}.mp4"
         if exists(out_file):
             os.remove(out_file)
-        fourcc = cv2.VideoWriter_fourcc(*"avc1")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         out = cv2.VideoWriter(out_file, fourcc, fps, (width, height))
 
         return cap, out

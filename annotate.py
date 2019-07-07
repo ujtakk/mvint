@@ -73,7 +73,7 @@ def draw_annotate(frame, index, pos, flow, bboxes):
         return draw_none(frame, index)
 
 def vis_annotate(movie, header, draw):
-    cap, out = open_video(movie)
+    cap, out = open_video(movie, postfix='annotate')
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
