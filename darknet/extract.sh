@@ -13,8 +13,12 @@ DARKNET=$TOPLEVEL/darknet/darknet
 DATA=cfg/combine9k.data
 NETWORK=cfg/yolo9000.cfg
 WEIGHTS=yolo9000.weights
-
 (cd `dirname $DARKNET`;
+  if [ ! -e $WEIGHTS ]; then
+    git clone https://github.com/philipperemy/yolo-9000
+    cat yolo-9000/yolo9000-weights/x* > yolo9000.weights
+  fi
+
   rm -rf bbox_dump
   mkdir -p bbox_dump
 

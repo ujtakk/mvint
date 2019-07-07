@@ -306,10 +306,10 @@ def main():
     args = parse_opt()
 
     flow, header = get_flow(args.movie)
-    # bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
-    from eval_mot16 import MOT16
-    mot = MOT16(os.path.basename(args.movie))
-    bboxes = mot.pick_bboxes()
+    bboxes = pick_bbox(os.path.join(args.movie, "bbox_dump"))
+    # from eval_mot16 import MOT16
+    # mot = MOT16(os.path.basename(args.movie))
+    # bboxes = mot.pick_bboxes()
     if args.compare:
         vis_composed(args.movie, header, flow, bboxes,
                      baseline=args.baseline, worst=args.worst)

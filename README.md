@@ -27,8 +27,8 @@ make -C darknet GPU=1 CUDNN=1 OPENCV=1
 We also use MPEG-flow [3] implementation to generate motion vectors
 from the target movie encoded by some specific codec.
 MPEG-flow contains two tools named `mpegflow` and `vis`.
-`mpegflow` uses libavcodec and `vis` uses OpenCV3,
-so we first have to prepare libavcodec / OpenCV3.
+`mpegflow` uses FFmpeg (libavcodec) and `vis` uses OpenCV3,
+so we first have to prepare FFmpeg (libavcodec) / OpenCV3.
 Then, we build `mpegflow` and `vis` from the root directory as:
 ```
 make -C mpegflow mpegflow vis
@@ -67,7 +67,6 @@ Extracted bounding boxes are dumped into `movie/hoge/bbox_dump`.
 There is also the movie (`movie/hoge/out_hoge.mp4`) that bounding boxes are annotated.
 
 ### Extract motion vectors using `mpegflow`
-
 We call MPEG-flow tools from python scripts to generate motion vectors.
 You can visualize the motion vectors field of specific movie `movie/hoge/hoge.mp4`
 by the `flow.py` script as below:
@@ -83,6 +82,8 @@ we can use the `annotate.py` script as below:
 python annotate.py movie/hoge
 ```
 The result movie is saved as `movie/hoge/hoge_annotate.mp4`.
+If you specified `--iframes` option,
+bounding boxes are visualized for only I-frames.
 
 ### Qualititative Evaluation
 In prior to quantitative evaluation,
@@ -121,8 +122,8 @@ License
 
 Sources are licensed under GPLv3 (inherited from `deep_sort`, `sort` sub-repository)
 
-The sample movie (`movie/`, [URL](https://))
-is redistributed under Creative Commons.
+The example movie (`movie/`, [7])
+is redistributed under Creative Commons (CC-BY).
 
 
 
@@ -140,6 +141,8 @@ References
 [5] A. Bewley, Z. Ge, L. Ott, F. Ramos, and B. Upcroft, "Simple Online and Realtime Tracking", In Proceedings of ICIP, 2016
 
 [6] N. Wojke, A. Bewley and D. Paulus, "Simple Online and Realtime Tracking with a Deep Association Metric", In Proceedings of ICIP, 2017
+
+[7] iPhotolife101, Corgi of BC Halloween Costume Parade, [URL](https://www.youtube.com/watch?v=blqjlztBYew)
 
 When you used this project for writing the paper,
 please cite our paper based on the bibtex below:

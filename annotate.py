@@ -5,6 +5,7 @@ Input:
     movie: str
         Directory name that contains the mp4 movie (encoded one)
         (Name of the movie have to be same as the directory name)
+    --iframes: option[bool]
 """
 
 import os
@@ -72,7 +73,7 @@ def draw_annotate(frame, index, pos, flow, bboxes):
     else:
         return draw_none(frame, index)
 
-def vis_annotate(movie, header, draw):
+def vis_annotate(movie, header, draw, onlyi=False):
     cap, out = open_video(movie, postfix='annotate')
     count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -86,7 +87,10 @@ def vis_annotate(movie, header, draw):
         cv2.putText(frame,
                     f"pict_type: {header['pict_type'][i]}", (10, height-10),
                     cv2.FONT_HERSHEY_DUPLEX, 1, (255, 255, 255), 1)
-        if header["pict_type"][i] == "I":
+        if onlyi:
+            if header["pict_type"][i] == "I":
+                pos = i
+        else:
             pos = i
         frame = draw(frame, i, pos)
         out.write(frame)
@@ -97,6 +101,9 @@ def vis_annotate(movie, header, draw):
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("movie")
+    parser.add_argument("--iframes",
+                        action="store_true", default=False,
+                        help="render bboxes only for i-frames")
     return parser.parse_args()
 
 def main():
