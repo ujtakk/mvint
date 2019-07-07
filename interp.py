@@ -366,12 +366,12 @@ def interp_none(bboxes, flow, frame):
     return bboxes
 
 def draw_i_frame(frame, flow, bboxes, color=(0, 255, 0)):
-    frame = draw_flow(frame, flow)
+    # frame = draw_flow(frame, flow)
     frame = draw_bboxes(frame, bboxes, color=color)
     return frame
 
 def draw_p_frame(frame, flow, base_bboxes, interp=interp_linear, color=(0, 255, 0)):
-    frame = draw_flow(frame, flow)
+    # frame = draw_flow(frame, flow)
     frame = draw_bboxes(frame, base_bboxes, color=color)
     if True:
         frame_rows = frame.shape[0]
