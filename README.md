@@ -77,6 +77,22 @@ Then the result movie is saved as `movie/hoge/hoge_flow.mp4`.
 Extracted motion vectors are dumped into `movie/hoge/mpegflow_dump`.
 
 To combine bounding boxes extracted above for visualizing,
+=======
+Default using Darknet implementation of YOLO9000 [2].
+
+```
+./darknet/extract.sh movie/hoge
+```
+
+### Extract motion vectors using `mpegflow`
+
+We call MPEG-flow tools from scripts
+```
+python flow.py movie/hoge
+```
+
+To combine bounding boxes extracted above for showing,
+>>>>>>> d111d44b9611b8b1096ac53bc7921ea96e75aab6
 we can use the `annotate.py` script as below:
 ```
 python annotate.py movie/hoge
@@ -142,8 +158,11 @@ References
 
 [6] N. Wojke, A. Bewley and D. Paulus, "Simple Online and Realtime Tracking with a Deep Association Metric", In Proceedings of ICIP, 2017
 
+<<<<<<< HEAD
 [7] iPhotolife101, Corgi of BC Halloween Costume Parade, [URL](https://www.youtube.com/watch?v=blqjlztBYew)
 
+=======
+>>>>>>> d111d44b9611b8b1096ac53bc7921ea96e75aab6
 When you used this project for writing the paper,
 please cite our paper based on the bibtex below:
 
