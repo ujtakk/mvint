@@ -57,46 +57,31 @@ To evaluate tracking performance, we first extract the bounding boxes offline.
 MVint is basically designed to be used in online tracking.)
 
 To extract the bounding boxes of given movie, execute the command below:
-(We used `movie/hoge/hoge.mp4` as an example movie.
+(We used `movie/corgi/corgi.mp4` as an example movie.
 You have to place your target movie `TARGET.mp4` to the directory `movie/TARGET`.)
 ```
-./darknet/extract.sh movie/hoge
+./darknet/extract.sh movie/corgi
 ```
 As the default extractor, we utilized Darknet implementation of YOLO9000 [2].
-Extracted bounding boxes are dumped into `movie/hoge/bbox_dump`.
-There is also the movie (`movie/hoge/out_hoge.mp4`) that bounding boxes are annotated.
+Extracted bounding boxes are dumped into `movie/corgi/bbox_dump`.
+There is also the movie (`movie/corgi/out_corgi.mp4`) that bounding boxes are annotated.
 
 ### Extract motion vectors using `mpegflow`
 We call MPEG-flow tools from python scripts to generate motion vectors.
-You can visualize the motion vectors field of specific movie `movie/hoge/hoge.mp4`
+You can visualize the motion vectors field of specific movie `movie/corgi/corgi.mp4`
 by the `flow.py` script as below:
 ```
-python flow.py movie/hoge
+python flow.py movie/corgi
 ```
-Then the result movie is saved as `movie/hoge/hoge_flow.mp4`.
-Extracted motion vectors are dumped into `movie/hoge/mpegflow_dump`.
-
-To combine bounding boxes extracted above for visualizing,
-=======
-Default using Darknet implementation of YOLO9000 [2].
-
-```
-./darknet/extract.sh movie/hoge
-```
-
-### Extract motion vectors using `mpegflow`
-
-We call MPEG-flow tools from scripts
-```
-python flow.py movie/hoge
-```
+Then the result movie is saved as `movie/corgi/corgi_flow.mp4`.
+Extracted motion vectors are dumped into `movie/corgi/mpegflow_dump`.
 
 To combine bounding boxes extracted above for showing,
 we can use the `annotate.py` script as below:
 ```
-python annotate.py movie/hoge
+python annotate.py movie/corgi
 ```
-The result movie is saved as `movie/hoge/hoge_annotate.mp4`.
+The result movie is saved as `movie/corgi/corgi_annotate.mp4`.
 If you specified `--iframes` option,
 bounding boxes are visualized for only I-frames.
 
@@ -105,11 +90,11 @@ In prior to quantitative evaluation,
 we can qualititatively check results produced by MVint.
 
 ```
-python interp.py movie/hoge
+python interp.py movie/corgi
 ```
 
 ```
-python kalman.py movie/hoge
+python kalman.py movie/corgi
 ```
 
 ### Quantitative Evaluation using MOT16
