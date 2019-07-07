@@ -137,7 +137,7 @@ License
 
 Sources are licensed under GPLv3 (inherited from `deep_sort`, `sort` sub-repository)
 
-The example movie (`movie/`, [7])
+The example movie (`movie/corgi`, [7])
 is redistributed under Creative Commons (CC-BY).
 
 
