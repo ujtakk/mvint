@@ -92,7 +92,6 @@ python flow.py movie/hoge
 ```
 
 To combine bounding boxes extracted above for showing,
->>>>>>> d111d44b9611b8b1096ac53bc7921ea96e75aab6
 we can use the `annotate.py` script as below:
 ```
 python annotate.py movie/hoge
