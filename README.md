@@ -49,6 +49,12 @@ pip install -r requirements.txt
 
 Also for MOT16 [4] evaluation, we have to setup MOT16 dataset and MATLAB.
 
+First, we prepare MOT16 dataset/devkit:
+```
+wget https://motchallenge.net/data/MOT16.zip && unzip -d MOT16 MOT16.zip
+hg clone https://bitbucket.org/amilan/motchallenge-devkit
+```
+
 
 
 Usage
@@ -127,7 +133,7 @@ interpolation settings, and the detector.
 License
 --------------------------------------------------
 
-Sources are licensed under GPLv3 (inherited from `deep_sort`, `sort` sub-repository)
+Sources are licensed under GPLv3 (inherited from `deep_sort`, `sort` sub-repository).
 
 The example movie (`movie/corgi`, [7])
 is redistributed under Creative Commons (CC-BY).
