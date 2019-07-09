@@ -116,7 +116,8 @@ def main():
 
     draw_annotate_func = lambda frame, index, pos: \
         draw_annotate(frame, index, pos, flow, bboxes)
-    vis_annotate(args.movie, header, draw=draw_annotate_func)
+    vis_annotate(args.movie, header, draw=draw_annotate_func,
+                 onlyi=args.iframes)
 
 if __name__ == "__main__":
     main()

@@ -91,15 +91,18 @@ bounding boxes are visualized for only I-frames.
 
 ### Qualititative Evaluation
 In prior to quantitative evaluation,
-we can qualititatively check results produced by MVint.
-
+we could qualititatively check results produced by MVint.
+Execute the command below to check:
 ```
 python interp.py movie/corgi
 ```
+Result movie is saved as `movie/corgi/corgi_interp.mp4`
 
+There is some enhanced version of script with the Kalman filter:
 ```
 python kalman.py movie/corgi
 ```
+Result movie is saved as `movie/corgi/corgi_kalman.mp4`
 
 ### Quantitative Evaluation using MOT16
 Finally we will perform quantitative evaluation using MOT16.
