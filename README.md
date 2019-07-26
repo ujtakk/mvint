@@ -114,6 +114,21 @@ Result movie is saved as `movie/corgi/corgi_kalman.mp4`
 Finally we will perform quantitative evaluation using MOT16.
 
 ```
+python mot16.py
+```
+
+```
+DISPLAY= matlab -r "compile; exit"
+```
+
+```
+sed -i \
+  -e 's|res/MOT16/data/|../result/|g' \
+  -e 's|../data/2DMOT16/train/|../MOT16/train/|g' \
+  motchallenge-devkit/demo_evalMOT16.m
+```
+
+```
 ./eval.sh
 ```
 
@@ -122,9 +137,13 @@ Finally we will perform quantitative evaluation using MOT16.
 The example MOT16 Result
 --------------------------------------------------
 
-With the evaluation using MOT16, we reproduced some example result as below:
+With the evaluation using MOT16, we reproduced an example result as below:
 ```
+ ********************* Your MOT16 Results *********************
+ IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL 
+ 49.6 59.6 42.5| 62.0  87.0  1.92|  517 112  285  120| 10225 41900   728  1317|  52.1  78.6  52.8 
 ```
+
 Tracking performance may differ when using different codec settings,
 interpolation settings, and the detector.
 

@@ -37,7 +37,6 @@ from mapping import SimpleMapper
 from bbox_ssd import predict, setup_model
 
 class MOT16:
-# {{{
     def __init__(self, src_id, src_dir="MOT16/train", dst_dir="result"):
         if not exists(dst_dir):
             os.makedirs(dst_dir)
@@ -81,12 +80,10 @@ class MOT16:
                   file=self.target)
 
         self.frame_count += 1
-# }}}
 
 def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
                thresh=0.0, baseline=False, worst=False, display=False,
                gop=12):
-# {{{
     mot = MOT16(src_id)
     bboxes = mot.pick_bboxes()
 
@@ -155,11 +152,9 @@ def eval_mot16(src_id, prefix="MOT16/train", MOT16=MOT16,
     cap.release()
     if display:
         out.release()
-# }}}
 
 def eval_mot16_pred(src_id, model, prefix="MOT16/train", MOT16=MOT16,
                     thresh=0.0, baseline=False, worst=False, display=False):
-# {{{
     mot = MOT16(src_id)
 
     movie = join(prefix, args.src_id)
@@ -215,7 +210,6 @@ def eval_mot16_pred(src_id, model, prefix="MOT16/train", MOT16=MOT16,
     cap.release()
     if display:
         out.release()
-# }}}
 
 def parse_opt():
     parser = argparse.ArgumentParser()

@@ -230,25 +230,29 @@ class MOT16Evaluator(chainer.training.extensions.Evaluator):
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dump-mp4",
-                        action="store_true", default=False)
+    parser.add_argument("--dump",
+                        action="store_true", default=True)
     return parser.parse_args()
 
 def main():
     args = parse_opt()
 
-    if args.dump_mp4:
-        with Pool(8) as p:
-            p.map(convert_seq, glob("/home/work/vision/MOT/MOT16/train/*"))
-            p.map(convert_seq, glob("/home/work/vision/MOT/MOT16/test/*"))
+    if args.dump:
+        for target in glob("MOT16/train/*"):
+            convert_seq(target)
+        for target in glob("MOT16/test/*"):
+            convert_seq(target)
+        # with Pool(8) as p:
+        #     p.map(convert_seq, glob("MOT16/train/*"))
+        #     p.map(convert_seq, glob("MOT16/test/*"))
     else:
-        D = MOT16Dataset("/home/work/vision/MOT/MOT16")
+        D = MOT16Dataset("MOT16")
         print(D.seqinfo)
         arglist = [np.sort(D.gtinfo[name]["class"].unique())
                    for name in D.seqinfo["name"].unique()]
         print(arglist)
-        print(gtinfo("/home/work/vision/MOT/MOT16/train/MOT16-02"))
-        print(detinfo("/home/work/vision/MOT/MOT16/test/MOT16-01"))
+        print(gtinfo("MOT16/train/MOT16-02"))
+        print(detinfo("MOT16/test/MOT16-01"))
         # print(D.imgs)
 
 if __name__ == "__main__":

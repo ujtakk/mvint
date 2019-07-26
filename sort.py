@@ -11,6 +11,7 @@ Input:
     --gop: option[int]
 """
 
+import os
 from os.path import join, exists, split
 import argparse
 
@@ -317,8 +318,8 @@ class MOT16_SORT(MOT16):
         self.min_height = 0.0
         self.frame_count = 1
 
-        self.mapper = SimpleMapper()
-        # self.mapper = KalmanMapper()
+        # self.mapper = SimpleMapper()
+        self.mapper = KalmanMapper()
         # self.mapper = SORTMapper()
         # self.mapper = DeepSORTMapper()
 
