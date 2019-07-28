@@ -47,14 +47,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Also for MOT16 [4] evaluation, we have to setup MOT16 dataset and MATLAB.
-
-First, we prepare MOT16 dataset/devkit:
+Also for MOT16 [4] evaluation, we have to prepare MOT16 dataset and
+MATLAB-based development kit.
+All commands for the preparation are scripted to `prepare_mot16.sh`,
+so execute the script as:
 ```
-wget https://motchallenge.net/data/MOT16.zip && unzip -d MOT16 MOT16.zip
-hg clone https://bitbucket.org/amilan/motchallenge-devkit
+./prepare_mot16.sh
 ```
-
+(NOTE: Development kit is distributed using Mercurial.
+If you haven't installed Mercurial, please install it.)
 
 
 Usage
@@ -113,29 +114,11 @@ Result movie is saved as `movie/corgi/corgi_kalman.mp4`
 ### Quantitative Evaluation using MOT16
 Finally we will perform quantitative evaluation using MOT16.
 
+Evaluation proceduce is scripted to `evaluate_mot16.sh`,
+so execute the script as:
 ```
-python mot16.py
+./evaluate_mot16.sh
 ```
-
-```
-DISPLAY= matlab -r "compile; exit"
-```
-
-```
-sed -i \
-  -e 's|res/MOT16/data/|../result/|g' \
-  -e 's|../data/2DMOT16/train/|../MOT16/train/|g' \
-  motchallenge-devkit/demo_evalMOT16.m
-```
-
-```
-./eval.sh
-```
-
-
-
-The example MOT16 Result
---------------------------------------------------
 
 With the evaluation using MOT16, we reproduced an example result as below:
 ```
