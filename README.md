@@ -123,8 +123,8 @@ so execute the script as:
 With the evaluation using MOT16, we reproduced an example result as below:
 ```
  ********************* Your MOT16 Results *********************
- IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL 
- 49.6 59.6 42.5| 62.0  87.0  1.92|  517 112  285  120| 10225 41900   728  1317|  52.1  78.6  52.8 
+ IDF1  IDP  IDR| Rcll  Prcn   FAR|   GT  MT   PT   ML|    FP    FN   IDs    FM|  MOTA  MOTP MOTAL
+ 49.5 59.5 42.4| 62.1  87.0  1.92|  517 114  282  121| 10199 41881   725  1308|  52.2  78.6  52.8
 ```
 
 Tracking performance may differ when using different codec settings,
