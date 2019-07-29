@@ -96,9 +96,9 @@ The result movie is saved as `movie/corgi/corgi_annotate.mp4`.
 If you specified `--iframes` option,
 bounding boxes are visualized for only I-frames.
 
-### Qualititative Evaluation
+### Qualitative Evaluation
 In prior to quantitative evaluation,
-we could qualititatively check results produced by MVint.
+we could qualitatively check results produced by MVint.
 Execute the command below to check:
 ```
 python interp.py movie/corgi
@@ -114,7 +114,7 @@ Result movie is saved as `movie/corgi/corgi_kalman.mp4`
 ### Quantitative Evaluation using MOT16
 Finally we will perform quantitative evaluation using MOT16.
 
-Evaluation proceduce is scripted to `evaluate_mot16.sh`,
+Evaluation procedures are scripted to `evaluate_mot16.sh`,
 so execute the script as:
 ```
 ./evaluate_mot16.sh
