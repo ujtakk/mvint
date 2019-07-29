@@ -1,4 +1,4 @@
-[WIP] MVint (for Tracking performance Evaluation)
+MVint (for Tracking performance Evaluation)
 ============================================================
 
 MVint is a tracking framework enhanced by motion vectors.
