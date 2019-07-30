@@ -6,6 +6,18 @@ This project is written and used for tracking performance evaluation in our pape
 
 [**Paper is available HERE.**](http://openaccess.thecvf.com/content_cvpr_2018_workshops/papers/w12/Ujiie_Interpolation-Based_Object_Detection_CVPR_2018_paper.pdf)
 
+If you used this project for writing the paper,
+please consider citing our paper as below:
+
+```
+@inproceedings{mvint,
+  author    = {Takayuki Ujiie and Masayuki Hiromoto and Takashi Sato},
+  booktitle = {Proceedings of CVPR Workshop},
+  title     = {Interpolation-Based Object Detection Using Motion Vectors for Embedded Real-Time Tracking Systems},
+  year      = {2018},
+}
+```
+
 
 
 Requirements
@@ -58,6 +70,7 @@ so execute the script as:
 ```
 (NOTE: Development kit is distributed using Mercurial.
 If you haven't installed Mercurial, please install it.)
+
 
 
 Usage
@@ -155,14 +168,3 @@ References
 [6] N. Wojke, A. Bewley and D. Paulus, "Simple Online and Realtime Tracking with a Deep Association Metric", In Proceedings of ICIP, 2017  
 [7] iPhotolife101, Corgi of BC Halloween Costume Parade, [URL](https://www.youtube.com/watch?v=blqjlztBYew)  
 
-When you used this project for writing the paper,
-please cite our paper based on the bibtex below:
-
-```
-@inproceedings{mvint,
-  author    = {Takayuki Ujiie and Masayuki Hiromoto and Takashi Sato},
-  booktitle = {Proceedings of CVPR Workshop},
-  title     = {Interpolation-Based Object Detection Using Motion Vectors for Embedded Real-Time Tracking Systems},
-  year      = {2018},
-}
-```
