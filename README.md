@@ -2,7 +2,8 @@ MVint (for Tracking performance Evaluation)
 ============================================================
 
 MVint is a tracking framework enhanced by motion vectors.
-This project is written and used for tracking performance evaluation in our paper [1].
+This project is written and used for tracking performance evaluation in
+[our paper](http://openaccess.thecvf.com/content_cvpr_2018_workshops/papers/w12/Ujiie_Interpolation-Based_Object_Detection_CVPR_2018_paper.pdf) [1].
 
 
 
